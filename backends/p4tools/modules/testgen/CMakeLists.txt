@@ -133,6 +133,7 @@ if(ENABLE_GTESTS)
     testgen-gtest
     PRIVATE testgen
     PRIVATE gtest
+    ${TESTGEN_LIBS}
   )
 
   add_custom_target(
