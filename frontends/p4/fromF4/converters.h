@@ -39,22 +39,7 @@ class ChangeName : public Transform {
     ChangeName() { setName("ChangeName"); }
 
     const IR::Node *preorder(IR::P4Class *laclass) override {
-        //dump(program);
-        //auto *tout_en_P4 = new IR::P4Program(program->srcInfo, program->objects);
-        std::cout << "p444444444444444444444444" << std::endl;
-        //dump(tout_en_P4);
-        /*auto toMove = new IR::IndexedVector<IR::StatOrDecl>();
-        for (auto e : laclass->body) {
-            toMove->push_back();
-        }*/
         auto toutEnP4 = new IR::IndexedVector<IR::Declaration>(laclass->controlLocals);
-        /*auto stats = new IR::IndexedVector<IR::StatOrDecl>();
-        for (auto e : laclass->body->components) {
-            stats->push_back(e);
-        }
-        auto result = new IR::BlockStatement(laclass->body->srcInfo, *stats);
-        return result;*/
-        //auto toutEnP4 = new IR::P4Action(laclass->srcInfo, laclass->name, laclass->parameters, laclass->body);
         return toutEnP4;
     }
 };
