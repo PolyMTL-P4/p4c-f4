@@ -21,7 +21,7 @@ limitations under the License.
 // Set up names.
 %defines
 %define api.namespace {P4}
-%define parser_class_name {P4Parser}
+%define api.parser.class {P4Parser}
 
 // Use the C++-native variant representation of tokens.
 %define api.token.constructor
@@ -223,7 +223,7 @@ inline std::ostream& operator<<(std::ostream& out, const P4::Token& t) {
 %token<Token>      TRUE FALSE THIS
 %token<Token>      ABSTRACT ACTION ACTIONS APPLY BOOL BIT CONST CONTROL DEFAULT
                    ELSE ENTRIES ENUM ERROR EXIT EXTERN HEADER HEADER_UNION IF IN INOUT
-                   INT KEY  LIST SELECT MATCH_KIND TYPE OUT PACKAGE PARSER PRAGMA RETURN STATE
+                   INT KEY  LIST SELECT MATCH_KIND TYPE OUT P4CLASS PACKAGE PARSER PRAGMA RETURN STATE
                    STRING STRUCT SWITCH TABLE TRANSITION TUPLE TYPEDEF VARBIT VALUESET VOID
 
 %token<cstring> IDENTIFIER TYPE_IDENTIFIER STRING_LITERAL
@@ -278,7 +278,7 @@ inline std::ostream& operator<<(std::ostream& out, const P4::Token& t) {
 %type<IR::Declaration*>     constantDeclaration actionDeclaration
                             variableDeclaration instantiation functionDeclaration
                             objDeclaration tableDeclaration controlLocalDeclaration
-                            parserLocalElement valueSetDeclaration
+                            parserLocalElement valueSetDeclaration p4classDeclaration
 %type<IR::Type_Declaration*>  headerTypeDeclaration structTypeDeclaration
                               headerUnionDeclaration derivedTypeDeclaration
                               parserDeclaration controlDeclaration enumDeclaration
@@ -453,6 +453,7 @@ declaration
     | parserDeclaration       { $$ = $1; }
     | typeDeclaration         { $$ = $1; }
     | controlDeclaration      { $$ = $1; }
+    | p4classDeclaration      { $$ = $1; }
     | instantiation           { $$ = $1; }
     | errorDeclaration        { driver.onReadErrorDeclaration($1); $$ = nullptr; }
     | matchKindDeclaration    { $$ = $1; }
@@ -570,6 +571,7 @@ annotationToken
     | MATCH_KIND       { $$ = $1; }
     | TYPE             { $$ = $1; }
     | OUT              { $$ = $1; }
+    | P4CLASS          { $$ = $1; }
     | PARSER           { $$ = $1; }
     | PACKAGE          { $$ = $1; }
     | PRAGMA           { $$ = $1; }
@@ -902,6 +904,7 @@ controlLocalDeclaration
     | tableDeclaration         { $$ = $1; }
     | instantiation            { $$ = $1; }
     | variableDeclaration      { $$ = $1; }
+    | p4classDeclaration       { $$ = $1; }
     ;
 
 controlBody
@@ -1352,6 +1355,14 @@ actionDeclaration
     : optAnnotations ACTION name "(" parameterList ")" blockStatement
         { auto pl = new IR::ParameterList(@5, *$5);
           $$ = new IR::P4Action(@3, *$3, $1, pl, $7); }
+    ;
+
+/*************************** P4CLASS ************************/
+
+p4classDeclaration
+    : optAnnotations P4CLASS name "(" parameterList ")" "{" controlLocalDeclarations "}"
+        { auto pl = new IR::ParameterList(@5, *$5);
+          $$ = new IR::P4Class(@3, *$3, $1, pl, *$8); }
     ;
 
 /************************* VARIABLES *****************************/

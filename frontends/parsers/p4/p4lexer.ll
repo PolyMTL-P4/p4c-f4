@@ -155,6 +155,8 @@ using Parser = P4::P4Parser;
                   return makeToken(TYPE); }
 "out"           { BEGIN(driver.saveState); driver.template_args = false;
                   return makeToken(OUT); }
+"p4class"       { BEGIN(driver.saveState); driver.template_args = false;
+                  return makeToken(P4CLASS); }
 "parser"        { BEGIN(driver.saveState); driver.template_args = false;
                   return makeToken(PARSER); }
 "package"       { BEGIN(driver.saveState); driver.template_args = false;

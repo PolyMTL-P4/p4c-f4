@@ -155,6 +155,20 @@ void IR::P4Action::dbprint(std::ostream &out) const {
     out << unindent << " }";
 }
 
+void IR::P4Class::dbprint(std::ostream &out) const {
+    out << "p4class " << name << "(";
+    const char *sep = "";
+    for (auto arg : parameters->parameters) {
+        out << sep << arg->direction << ' ' << arg->type << ' ' << arg->name;
+        sep = ", ";
+    }
+    out << ") {" << indent;
+    for (auto d : controlLocals) out << Log::endl << d;
+    /*if (controlLocals)
+        for (auto p : controlLocals->components) out << Log::endl << p;*/
+    out << unindent << " }";
+}
+
 void IR::BlockStatement::dbprint(std::ostream &out) const {
     out << "{" << indent;
     bool first = true;

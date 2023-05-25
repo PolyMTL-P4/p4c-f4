@@ -157,6 +157,19 @@ class P4Action : Declaration, ISimpleNamespace, IAnnotated, IFunctional {
     ParameterList getParameters() const override { return parameters; }
 }
 
+class P4Class : Declaration, ISimpleNamespace, IAnnotated, IFunctional {
+    optional Annotations        annotations = Annotations::empty;
+    ParameterList               parameters;
+    inline IndexedVector<Declaration>  controlLocals;
+
+    Util::Enumerator<IDeclaration>* getDeclarations() const override {
+        return parameters->getDeclarations(); }
+    IDeclaration getDeclByName(cstring name) const override {
+        return parameters->getDeclByName(name); }
+    Annotations getAnnotations() const override { return annotations; }
+    ParameterList getParameters() const override { return parameters; }
+}
+
 class Type_Error : ISimpleNamespace, Type_Declaration {
     static const cstring error;
     optional inline IndexedVector<Declaration_ID> members;
