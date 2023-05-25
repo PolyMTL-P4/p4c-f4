@@ -19,6 +19,7 @@ limitations under the License.
 
 #include "frontends/common/options.h"
 #include "frontends/p4/fromv1.0/converters.h"
+#include "frontends/p4/fromF4/converters.h"
 #include "frontends/p4/frontend.h"
 #include "frontends/parsers/parserDriver.h"
 #include "lib/error.h"
@@ -60,7 +61,7 @@ static const IR::P4Program *parseV1Program(Input &stream, const char *sourceFile
  * @return a P4-16 IR tree representing the contents of the given file, or null
  * on failure. If failure occurs, an error will also be reported.
  */
-template <typename C = P4V1::Converter>
+template <typename C = F4::Converter>
 const IR::P4Program *parseP4File(ParserOptions &options) {
     BUG_CHECK(&options == &P4CContext::get().options(),
               "Parsing using options that don't match the current "
@@ -81,6 +82,9 @@ const IR::P4Program *parseP4File(ParserOptions &options) {
                       ? parseV1Program<FILE *, C>(in, options.file, 1, options.getDebugHook())
                       : P4ParserDriver::parse(in, options.file);
     options.closeInput(in);
+
+    C converter;
+    result = result->apply(converter);
 
     if (::errorCount() > 0) {
         ::error(ErrorType::ERR_OVERLIMIT, "%1% errors encountered, aborting compilation",

@@ -21,6 +21,7 @@ limitations under the License.
 #include <optional>
 #include <sstream>
 
+#include "frontends/p4/fromF4/converters.h"
 #include "frontends/p4/fromv1.0/converters.h"
 #include "frontends/p4/frontend.h"
 #include "frontends/parsers/parserDriver.h"
