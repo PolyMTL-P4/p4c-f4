@@ -18,6 +18,7 @@ limitations under the License.
 #define _FRONTENDS_P4_FROMF4_CONVERTERS_H_
 
 #include <iostream>
+#include <map>
 #include <typeindex>
 #include <typeinfo>
 #include <utility>
@@ -29,35 +30,37 @@ limitations under the License.
 #include "ir/ir.h"
 #include "ir/pass_manager.h"
 #include "ir/visitor.h"
+#include "lib/cstring.h"
 #include "lib/safe_vector.h"
 
 namespace F4 {
 
 class RegisterClass : public Transform {
-    IR::IndexedVector<IR::Declaration> *laClassMap;
+    std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
 
  public:
-    explicit RegisterClass(IR::IndexedVector<IR::Declaration> *laClassMap)
+    explicit RegisterClass(std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap)
         : laClassMap(laClassMap)
         { setName("RegisterClass"); }
 
     const IR::Node *preorder(IR::P4Class *laclass) override {
-        *laClassMap = laclass->controlLocals;
+        laClassMap->emplace(laclass->name.toString(), laclass->controlLocals);
         return nullptr;
     }
 };
 
 class ExtendP4class : public Transform {
-    IR::IndexedVector<IR::Declaration> *laClassMap;
+    std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
 
  public:
-    explicit ExtendP4class(IR::IndexedVector<IR::Declaration> *laClassMap)
+    explicit ExtendP4class(std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap)
         : laClassMap(laClassMap)
         { setName("ExtendP4Class"); }
 
     const IR::Node *postorder(IR::Declaration_Instance *lobjet) override {
-        if (lobjet->type->toString() == "testit") {
-            return new IR::IndexedVector<IR::Declaration>(*laClassMap); 
+        const cstring typeName = lobjet->type->toString();
+        if (laClassMap->count(typeName) > 0) {
+            return new IR::IndexedVector<IR::Declaration>(laClassMap->find(typeName)->second); 
         }
             return lobjet;
     }
@@ -71,7 +74,7 @@ class Converter : public PassManager {
     Converter();
     void loadModel() {}
     Visitor::profile_t init_apply(const IR::Node *node) override;
-    IR::IndexedVector<IR::Declaration> *laClassMap;
+    std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
 };
 
 } // namespace F4

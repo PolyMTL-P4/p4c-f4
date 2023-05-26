@@ -29,7 +29,7 @@ namespace F4 {
 
 ///////////////////////////////////////////////////////////////
 
-Converter::Converter() : laClassMap(new IR::IndexedVector<IR::Declaration>()) {
+Converter::Converter() : laClassMap(new std::map<cstring, IR::IndexedVector<IR::Declaration>>()) {
     setName("Converter");
 
     passes.emplace_back(new RegisterClass(laClassMap));
