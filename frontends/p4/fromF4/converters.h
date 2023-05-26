@@ -20,6 +20,7 @@ limitations under the License.
 #include <iostream>
 #include <typeindex>
 #include <typeinfo>
+#include <utility>
 
 #include "frontends/p4/coreLibrary.h"
 #include "ir/dump.h"
@@ -32,26 +33,45 @@ limitations under the License.
 
 namespace F4 {
 
-/// Detects whether there are two declarations in the P4-14 program
-/// with the same name and for the same kind of object.
-class ChangeName : public Transform {
+class RegisterClass : public Transform {
+    IR::IndexedVector<IR::Declaration> *laClassMap;
+
  public:
-    ChangeName() { setName("ChangeName"); }
+    explicit RegisterClass(IR::IndexedVector<IR::Declaration> *laClassMap)
+        : laClassMap(laClassMap)
+        { setName("RegisterClass"); }
 
     const IR::Node *preorder(IR::P4Class *laclass) override {
-        auto toutEnP4 = new IR::IndexedVector<IR::Declaration>(laclass->controlLocals);
-        return toutEnP4;
+        *laClassMap = laclass->controlLocals;
+        return nullptr;
+    }
+};
+
+class ExtendP4class : public Transform {
+    IR::IndexedVector<IR::Declaration> *laClassMap;
+
+ public:
+    explicit ExtendP4class(IR::IndexedVector<IR::Declaration> *laClassMap)
+        : laClassMap(laClassMap)
+        { setName("ExtendP4Class"); }
+
+    const IR::Node *postorder(IR::Declaration_Instance *lobjet) override {
+        if (lobjet->type->toString() == "testit") {
+            return new IR::IndexedVector<IR::Declaration>(*laClassMap); 
+        }
+            return lobjet;
     }
 };
 
 ///////////////////////////////////////////////////////////////
 
-// Is fed a P4-14 program and outputs an equivalent P4-16 program in v1model
+// Is fed a F4 program and outputs an equivalent P4-16 program
 class Converter : public PassManager {
  public:
     Converter();
     void loadModel() {}
     Visitor::profile_t init_apply(const IR::Node *node) override;
+    IR::IndexedVector<IR::Declaration> *laClassMap;
 };
 
 } // namespace F4

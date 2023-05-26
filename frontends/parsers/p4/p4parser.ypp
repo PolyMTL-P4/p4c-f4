@@ -1361,7 +1361,8 @@ actionDeclaration
 
 p4classDeclaration
     : optAnnotations P4CLASS name "(" parameterList ")" "{" controlLocalDeclarations "}"
-        { auto pl = new IR::ParameterList(@5, *$5);
+        { driver.structure->declareType(*$3);
+          auto pl = new IR::ParameterList(@5, *$5);
           $$ = new IR::P4Class(@3, *$3, $1, pl, *$8); }
     ;
 

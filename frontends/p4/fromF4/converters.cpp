@@ -21,17 +21,19 @@ limitations under the License.
 #include "frontends/common/resolveReferences/referenceMap.h"
 #include "frontends/common/resolveReferences/resolveReferences.h"
 #include "frontends/p4/coreLibrary.h"
+#include "ir/indexed_vector.h"
+#include "ir/ir-generated.h"
 #include "lib/big_int_util.h"
 
 namespace F4 {
 
 ///////////////////////////////////////////////////////////////
 
-Converter::Converter() {
+Converter::Converter() : laClassMap(new IR::IndexedVector<IR::Declaration>()) {
     setName("Converter");
 
-    passes.emplace_back(new ChangeName());
-
+    passes.emplace_back(new RegisterClass(laClassMap));
+    passes.emplace_back(new ExtendP4class(laClassMap));
 }
 
 Visitor::profile_t Converter::init_apply(const IR::Node *node) {
