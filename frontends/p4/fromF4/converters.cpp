@@ -24,10 +24,23 @@ limitations under the License.
 #include "ir/indexed_vector.h"
 #include "ir/ir-generated.h"
 #include "lib/big_int_util.h"
+#include "lib/cstring.h"
 
 namespace F4 {
 
 ///////////////////////////////////////////////////////////////
+
+IR::IndexedVector<IR::Declaration> *ExtendP4class::addName (IR::IndexedVector<IR::Declaration> *ref,
+                                                cstring className, cstring instanceName) {
+    auto result = new IR::IndexedVector<IR::Declaration>();
+    for (auto *d : *ref) {
+        auto newName = d->name.toString() + "_" + className + "_" + instanceName;
+        auto *newDecl = d->clone();
+        newDecl->setName(IR::ID(newName));
+        result->push_back(newDecl);
+    }
+    return result;
+}
 
 Converter::Converter() : laClassMap(new std::map<cstring, IR::IndexedVector<IR::Declaration>>()) {
     setName("Converter");

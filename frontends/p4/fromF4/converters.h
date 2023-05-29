@@ -52,15 +52,20 @@ class RegisterClass : public Transform {
 class ExtendP4class : public Transform {
     std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
 
+ protected:
+    static IR::IndexedVector<IR::Declaration> *addName (IR::IndexedVector<IR::Declaration> *ref,
+                                                cstring className, cstring instanceName);
+
  public:
     explicit ExtendP4class(std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap)
         : laClassMap(laClassMap)
         { setName("ExtendP4Class"); }
 
-    const IR::Node *postorder(IR::Declaration_Instance *lobjet) override {
+    const IR::Node *preorder(IR::Declaration_Instance *lobjet) override {
         const cstring typeName = lobjet->type->toString();
+        const cstring instanceName = lobjet->Name();
         if (laClassMap->count(typeName) > 0) {
-            return new IR::IndexedVector<IR::Declaration>(laClassMap->find(typeName)->second); 
+            return addName(&laClassMap->find(typeName)->second, typeName, instanceName);
         }
             return lobjet;
     }

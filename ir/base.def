@@ -132,6 +132,7 @@ abstract Declaration : StatOrDecl, IDeclaration {
     ID          name;
     long declid = nextId++;
     ID getName() const override { return name; }
+    void setName(ID newName) { name = newName; return;}
     equiv { return name == a.name; /* ignore declid */ }
  private:
     static long nextId;
