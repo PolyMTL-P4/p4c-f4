@@ -62,10 +62,10 @@ class ExtendP4class : public Transform {
         { setName("ExtendP4Class"); }
 
     const IR::Node *preorder(IR::Declaration_Instance *lobjet) override {
-        const cstring typeName = lobjet->type->toString();
+        const cstring className = lobjet->type->toString();
         const cstring instanceName = lobjet->Name();
-        if (laClassMap->count(typeName) > 0) {
-            return addName(&laClassMap->find(typeName)->second, typeName, instanceName);
+        if (laClassMap->count(className) > 0) {
+            return addName(&laClassMap->find(className)->second, className, instanceName);
         }
             return lobjet;
     }
