@@ -73,14 +73,6 @@ class ExtendP4class : public Transform {
             return lobjet;
     }
 
-    const IR::Node *preorder(IR::Member *lemembre) override {
-        const cstring exprName = lemembre->expr->toString();
-        if (instanceMap->count(exprName) > 0) {
-            return lemembre;
-        }
-        return lemembre;
-    }
-
     const IR::Node *preorder(IR::MethodCallExpression *lecall) override {
         if (lecall->method->is<IR::Member>()) {
             auto lemembre = lecall->method->to<IR::Member>();
