@@ -51,23 +51,47 @@ class RegisterClass : public Transform {
 
 class ExtendP4class : public Transform {
     std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
+    std::map<cstring, cstring> *instanceMap;
 
  protected:
     static IR::IndexedVector<IR::Declaration> *addName (IR::IndexedVector<IR::Declaration> *ref,
                                                 cstring className, cstring instanceName);
 
  public:
-    explicit ExtendP4class(std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap)
-        : laClassMap(laClassMap)
+    explicit ExtendP4class(std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap,
+                           std::map<cstring, cstring> *instanceMap)
+        : laClassMap(laClassMap), instanceMap(instanceMap)
         { setName("ExtendP4Class"); }
 
     const IR::Node *preorder(IR::Declaration_Instance *lobjet) override {
         const cstring className = lobjet->type->toString();
         const cstring instanceName = lobjet->Name();
         if (laClassMap->count(className) > 0) {
+            instanceMap->emplace(instanceName, className);
             return addName(&laClassMap->find(className)->second, className, instanceName);
         }
             return lobjet;
+    }
+
+    const IR::Node *preorder(IR::Member *lemembre) override {
+        const cstring exprName = lemembre->expr->toString();
+        if (instanceMap->count(exprName) > 0) {
+            return lemembre;
+        }
+        return lemembre;
+    }
+
+    const IR::Node *preorder(IR::MethodCallExpression *lecall) override {
+        if (lecall->method->is<IR::Member>()) {
+            auto lemembre = lecall->method->to<IR::Member>();
+            auto exprName = lemembre->expr->toString();
+            auto instName = lemembre->member.toString();
+            if (instanceMap->count(exprName) > 0) {
+                auto finalName = instName + "_" + instanceMap->find(exprName)->second + "_" + exprName;
+                return new IR::MethodCallExpression(lecall->srcInfo, new IR::PathExpression(IR::ID(finalName)));
+            }
+        }
+        return lecall;
     }
 };
 
@@ -80,6 +104,7 @@ class Converter : public PassManager {
     void loadModel() {}
     Visitor::profile_t init_apply(const IR::Node *node) override;
     std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
+    std::map<cstring, cstring> *instanceMap;
 };
 
 } // namespace F4
