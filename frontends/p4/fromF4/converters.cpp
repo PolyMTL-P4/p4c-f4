@@ -31,7 +31,7 @@ namespace F4 {
 
 ///////////////////////////////////////////////////////////////
 
-IR::IndexedVector<IR::Declaration> *ExtendP4class::addName (IR::IndexedVector<IR::Declaration> *ref,
+IR::IndexedVector<IR::Declaration> *ExtendP4class::addNameToDecls (IR::IndexedVector<IR::Declaration> *ref,
                                                 cstring className, cstring instanceName) {
     auto result = new IR::IndexedVector<IR::Declaration>();
     for (auto *d : *ref) {
@@ -44,11 +44,12 @@ IR::IndexedVector<IR::Declaration> *ExtendP4class::addName (IR::IndexedVector<IR
 }
 
 Converter::Converter() : laClassMap(new std::map<cstring, IR::IndexedVector<IR::Declaration>>()),
+                         laParaMap(new std::map<cstring, IR::ParameterList>()),
                          instanceMap(new std::map<cstring, cstring>()) {
     setName("Converter");
 
-    passes.emplace_back(new RegisterClass(laClassMap));
-    passes.emplace_back(new ExtendP4class(laClassMap, instanceMap));
+    passes.emplace_back(new RegisterClass(laClassMap, laParaMap));
+    passes.emplace_back(new ExtendP4class(laClassMap, laParaMap, instanceMap));
 }
 
 Visitor::profile_t Converter::init_apply(const IR::Node *node) {

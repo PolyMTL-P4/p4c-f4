@@ -35,47 +35,79 @@ limitations under the License.
 
 namespace F4 {
 
-class RegisterClass : public Transform {
-    std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
+class ReplaceParameters : public Transform {
+    std::map<cstring, IR::Argument> *paramArgMap;
 
  public:
-    explicit RegisterClass(std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap)
-        : laClassMap(laClassMap)
+    explicit ReplaceParameters(std::map<cstring, IR::Argument> *paramArgMap) : paramArgMap(paramArgMap)
+    { setName("ReplaceParameters"); }
+
+    const IR::Node *postorder(IR::Expression *lExpr) override {
+        if (paramArgMap->count(lExpr->toString()) > 0) {
+            auto newExpr = paramArgMap->find(lExpr->toString())->second.expression;
+            return newExpr;
+        }
+        return lExpr;
+    }
+};
+
+class RegisterClass : public Transform {
+    std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
+    std::map<cstring, IR::ParameterList> *laParaMap;
+
+ public:
+    explicit RegisterClass(std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap,
+                           std::map<cstring, IR::ParameterList> *laParaMap)
+        : laClassMap(laClassMap), laParaMap(laParaMap)
         { setName("RegisterClass"); }
 
     const IR::Node *preorder(IR::P4Class *laclass) override {
         laClassMap->emplace(laclass->name.toString(), laclass->controlLocals);
+        laParaMap->emplace(laclass->name.toString(), *(laclass->getParameters()));
         return nullptr;
     }
 };
 
 class ExtendP4class : public Transform {
     std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
+    std::map<cstring, IR::ParameterList> *laParaMap;
     std::map<cstring, cstring> *instanceMap;
+    std::map<cstring, IR::Argument> *paramArgMap;
 
  protected:
-    static IR::IndexedVector<IR::Declaration> *addName (IR::IndexedVector<IR::Declaration> *ref,
+    static IR::IndexedVector<IR::Declaration> *addNameToDecls (IR::IndexedVector<IR::Declaration> *ref,
                                                 cstring className, cstring instanceName);
 
  public:
     explicit ExtendP4class(std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap,
+                           std::map<cstring, IR::ParameterList> *laParaMap,
                            std::map<cstring, cstring> *instanceMap)
-        : laClassMap(laClassMap), instanceMap(instanceMap)
+        : laClassMap(laClassMap), laParaMap(laParaMap), instanceMap(instanceMap)
         { setName("ExtendP4Class"); }
 
     const IR::Node *preorder(IR::Declaration_Instance *lobjet) override {
         const cstring className = lobjet->type->toString();
         const cstring instanceName = lobjet->Name();
+        
+        auto paramArgMap = new std::map<cstring, IR::Argument>();
         if (laClassMap->count(className) > 0) {
+            auto lesParams = laParaMap->find(className)->second.parameters;
+            //auto chepakoi = new std::map<cstring, IR::Argument>;
+            for (size_t i = 0; i < lesParams.size(); i++) {
+                paramArgMap->emplace(lesParams.at(i)->name.toString(), *(lobjet->arguments->at(i)));
+            }
             instanceMap->emplace(instanceName, className);
-            return addName(&laClassMap->find(className)->second, className, instanceName);
+            auto *renamedDecls = addNameToDecls(&laClassMap->find(className)->second, className, instanceName);
+            //auto visiteur = new ReplaceParameters(paramArgMap);
+            auto result = renamedDecls->apply(ReplaceParameters(paramArgMap));
+            return result;
         }
             return lobjet;
     }
 
     const IR::Node *preorder(IR::MethodCallExpression *lecall) override {
         if (lecall->method->is<IR::Member>()) {
-            auto lemembre = lecall->method->to<IR::Member>();
+            const auto *lemembre = lecall->method->to<IR::Member>();
             auto exprName = lemembre->expr->toString();
             auto instName = lemembre->member.toString();
             if (instanceMap->count(exprName) > 0) {
@@ -96,6 +128,7 @@ class Converter : public PassManager {
     void loadModel() {}
     Visitor::profile_t init_apply(const IR::Node *node) override;
     std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
+    std::map<cstring, IR::ParameterList> *laParaMap;
     std::map<cstring, cstring> *instanceMap;
 };
 
