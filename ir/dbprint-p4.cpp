@@ -163,7 +163,7 @@ void IR::P4Class::dbprint(std::ostream &out) const {
         sep = ", ";
     }
     out << ") {" << indent;
-    for (auto d : controlLocals) out << Log::endl << d;
+    for (auto d : localDeclarations) out << Log::endl << d;
     /*if (controlLocals)
         for (auto p : controlLocals->components) out << Log::endl << p;*/
     out << unindent << " }";

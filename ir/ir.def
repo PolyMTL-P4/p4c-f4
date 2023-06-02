@@ -160,7 +160,7 @@ class P4Action : Declaration, ISimpleNamespace, IAnnotated, IFunctional {
 class P4Class : Declaration, ISimpleNamespace, IAnnotated, IFunctional {
     optional Annotations        annotations = Annotations::empty;
     ParameterList               parameters;
-    inline IndexedVector<Declaration>  controlLocals;
+    inline IndexedVector<Declaration> localDeclarations;
 
     Util::Enumerator<IDeclaration>* getDeclarations() const override {
         return parameters->getDeclarations(); }

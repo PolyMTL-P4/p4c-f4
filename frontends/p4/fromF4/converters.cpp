@@ -32,10 +32,12 @@ namespace F4 {
 ///////////////////////////////////////////////////////////////
 
 IR::IndexedVector<IR::Declaration> *ExtendP4class::addNameToDecls (IR::IndexedVector<IR::Declaration> *ref,
-                                                cstring className, cstring instanceName) {
-    auto result = new IR::IndexedVector<IR::Declaration>();
+                                                cstring className, cstring instanceName,
+                                                std::map<cstring, cstring> *substituteVars) {
+    auto *result = new IR::IndexedVector<IR::Declaration>();
     for (auto *d : *ref) {
         auto newName = d->name.toString() + "_" + className + "_" + instanceName;
+        substituteVars->emplace(d->name.toString(), newName);
         auto *newDecl = d->clone();
         newDecl->setName(IR::ID(newName));
         result->push_back(newDecl);

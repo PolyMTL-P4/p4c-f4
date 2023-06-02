@@ -279,6 +279,7 @@ inline std::ostream& operator<<(std::ostream& out, const P4::Token& t) {
                             variableDeclaration instantiation functionDeclaration
                             objDeclaration tableDeclaration controlLocalDeclaration
                             parserLocalElement valueSetDeclaration p4classDeclaration
+                            p4classLocalDeclaration
 %type<IR::Type_Declaration*>  headerTypeDeclaration structTypeDeclaration
                               headerUnionDeclaration derivedTypeDeclaration
                               parserDeclaration controlDeclaration enumDeclaration
@@ -289,6 +290,7 @@ inline std::ostream& operator<<(std::ostream& out, const P4::Token& t) {
 %type<IR::Type_Parser*>     parserTypeDeclaration
 %type<IR::Type_Control*>    controlTypeDeclaration
 %type<IR::IndexedVector<IR::Declaration>*>  parserLocalElements controlLocalDeclarations
+                            p4classLocalDeclarations
 %type<IR::StructField*>     structField
 %type<IR::IndexedVector<IR::StructField>*>  structFieldList
 %type<IR::IndexedVector<IR::SerEnumMember>*> specifiedIdentifierList
@@ -1359,8 +1361,20 @@ actionDeclaration
 
 /*************************** P4CLASS ************************/
 
+p4classLocalDeclarations
+    : %empty { $$ = new IR::IndexedVector<IR::Declaration>(); }
+    | p4classLocalDeclarations p4classLocalDeclaration { $$ = $1; $$->push_back($2); $$->srcInfo = @1 + @2; }
+    ;
+
+p4classLocalDeclaration
+    : constantDeclaration      { $$ = $1; }
+    | instantiation            { $$ = $1; }
+    | variableDeclaration      { $$ = $1; }
+    | actionDeclaration        { $$ = $1; }
+    ;
+
 p4classDeclaration
-    : optAnnotations P4CLASS name "(" parameterList ")" "{" controlLocalDeclarations "}"
+    : optAnnotations P4CLASS name "(" parameterList ")" "{" p4classLocalDeclarations "}"
         { driver.structure->declareType(*$3);
           auto pl = new IR::ParameterList(@5, *$5);
           $$ = new IR::P4Class(@3, *$3, $1, pl, *$8); }
