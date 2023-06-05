@@ -77,8 +77,8 @@ class ExtendP4class : public Transform {
     std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
     std::map<cstring, IR::ParameterList> *laParaMap;
     std::map<cstring, cstring> *instanceMap;
-    std::map<cstring, IR::Argument> *paramArgMap;
-    std::map<cstring, cstring> *substituteVars;
+    std::map<cstring, IR::Argument> *paramArgMap{};
+    std::map<cstring, cstring> *substituteVars{};
 
  protected:
     static IR::IndexedVector<IR::Declaration> *addNameToDecls (IR::IndexedVector<IR::Declaration> *ref,
@@ -95,9 +95,8 @@ class ExtendP4class : public Transform {
     const IR::Node *preorder(IR::Declaration_Instance *lobjet) override {
         const cstring className = lobjet->type->toString();
         const cstring instanceName = lobjet->Name();
-        
         auto *paramArgMap = new std::map<cstring, IR::Argument>();
-        auto *substituteVars =  new std::map<cstring, cstring>();
+        auto *substituteVars = new std::map<cstring, cstring>();
         if (laClassMap->count(className) > 0) {
             auto lesParams = laParaMap->find(className)->second.parameters;
             //auto chepakoi = new std::map<cstring, IR::Argument>;
@@ -135,6 +134,8 @@ class Converter : public PassManager {
     Converter();
     void loadModel() {}
     Visitor::profile_t init_apply(const IR::Node *node) override;
+    
+ private:
     std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
     std::map<cstring, IR::ParameterList> *laParaMap;
     std::map<cstring, cstring> *instanceMap;

@@ -35,7 +35,7 @@ IR::IndexedVector<IR::Declaration> *ExtendP4class::addNameToDecls (IR::IndexedVe
                                                 cstring className, cstring instanceName,
                                                 std::map<cstring, cstring> *substituteVars) {
     auto *result = new IR::IndexedVector<IR::Declaration>();
-    for (auto *d : *ref) {
+    for (const auto *d : *ref) {
         auto newName = d->name.toString() + "_" + className + "_" + instanceName;
         substituteVars->emplace(d->name.toString(), newName);
         auto *newDecl = d->clone();
