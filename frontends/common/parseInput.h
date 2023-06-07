@@ -21,8 +21,11 @@ limitations under the License.
 #include "frontends/p4/fromF4/converters.h"
 #include "frontends/p4/fromv1.0/converters.h"
 #include "frontends/p4/frontend.h"
+#include "frontends/p4/toP4/toP4.h"
 #include "frontends/parsers/parserDriver.h"
 #include "lib/error.h"
+#include "lib/nullstream.h"
+#include "lib/path.h"
 #include "lib/source_file.h"
 
 namespace IR {
@@ -86,13 +89,35 @@ const IR::P4Program *parseP4File(ParserOptions &options) {
     C converter;
     result = result->apply(converter);
 
+    options.file = options.file + ".tmp";
+    Util::PathName path(options.file);
+    std::ostream *ppStream = openFile(path.toString(), true);
+    P4::ToP4 top4(ppStream, false, options.file);
+    (void)result->apply(top4);
+
+    FILE *in2 = nullptr;
+    if (options.doNotPreprocess) {
+        in2 = fopen(options.file, "r");
+        if (in2 == nullptr) {
+            ::error(ErrorType::ERR_NOT_FOUND, "%1%: No such file or directory.", options.file);
+            return nullptr;
+        }
+    } else {
+        in2 = options.preprocess();
+        if (::errorCount() > 0 || in2 == nullptr) return nullptr;
+    }
+
+    const auto *result2 = P4::P4ParserDriver::parse(in2, options.file);
+
+    options.closeInput(in2);
+
     if (::errorCount() > 0) {
         ::error(ErrorType::ERR_OVERLIMIT, "%1% errors encountered, aborting compilation",
                 ::errorCount());
         return nullptr;
     }
-    BUG_CHECK(result != nullptr, "Parsing failed, but we didn't report an error");
-    return result;
+    BUG_CHECK(result2 != nullptr, "Parsing failed, but we didn't report an error");
+    return result2;
 }
 
 /**
