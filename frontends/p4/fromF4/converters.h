@@ -47,7 +47,6 @@ class ReplaceMembers : public Transform {
         auto exprName = elMembre->expr->toString();
         auto instName = elMembre->member.toString();
         if (instanceMap->count(exprName) > 0) {
-            std::cout << exprName << " inst " << instName << std::endl;
             auto finalName = instName + "_" + instanceMap->find(exprName)->second + "_" + exprName;
             return new IR::PathExpression(IR::ID(finalName));
         }
