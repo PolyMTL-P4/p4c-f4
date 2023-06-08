@@ -35,6 +35,27 @@ limitations under the License.
 
 namespace F4 {
 
+class ReplaceMembers : public Transform {
+    std::map<cstring, cstring> *instanceMap;
+
+ public:
+    explicit ReplaceMembers(std::map<cstring, cstring> *instanceMap) : instanceMap(instanceMap) {
+        setName("ReplaceMembers");
+    }
+
+    const IR::Node *preorder(IR::Member *elMembre) override {
+        auto exprName = elMembre->expr->toString();
+        auto instName = elMembre->member.toString();
+        if (instanceMap->count(exprName) > 0) {
+            std::cout << exprName << " inst " << instName << std::endl;
+            auto finalName = instName + "_" + instanceMap->find(exprName)->second + "_" + exprName;
+            return new IR::PathExpression(IR::ID(finalName));
+        }
+        return elMembre;
+    }
+};
+
+
 class ReplaceParameters : public Transform {
     std::map<cstring, IR::Argument> *paramArgMap;
     std::map<cstring, cstring> *substituteVars;
@@ -112,17 +133,10 @@ class ExtendP4class : public Transform {
             return lobjet;
     }
 
-    const IR::Node *preorder(IR::MethodCallExpression *lecall) override {
-        if (lecall->method->is<IR::Member>()) {
-            const auto *lemembre = lecall->method->to<IR::Member>();
-            auto exprName = lemembre->expr->toString();
-            auto instName = lemembre->member.toString();
-            if (instanceMap->count(exprName) > 0) {
-                auto finalName = instName + "_" + instanceMap->find(exprName)->second + "_" + exprName;
-                return new IR::MethodCallExpression(lecall->srcInfo, new IR::PathExpression(IR::ID(finalName)));
-            }
-        }
-        return lecall;
+    const IR::Node *preorder(IR::Expression *lecall) override {
+        const auto *newCall = lecall->clone();
+        newCall = newCall->apply(ReplaceMembers(instanceMap));
+        return newCall;
     }
 };
 

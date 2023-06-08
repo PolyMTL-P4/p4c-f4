@@ -1368,9 +1368,10 @@ p4classLocalDeclarations
 
 p4classLocalDeclaration
     : constantDeclaration      { $$ = $1; }
+    | actionDeclaration        { $$ = $1; }
+    | tableDeclaration         { $$ = $1; }
     | instantiation            { $$ = $1; }
     | variableDeclaration      { $$ = $1; }
-    | actionDeclaration        { $$ = $1; }
     ;
 
 p4classDeclaration
