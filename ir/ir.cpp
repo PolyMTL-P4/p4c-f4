@@ -197,6 +197,13 @@ const IR::Path *ActionListElement::getPath() const {
     auto expr = expression;
     if (expr->is<IR::MethodCallExpression>()) expr = expr->to<IR::MethodCallExpression>()->method;
     if (expr->is<IR::PathExpression>()) return expr->to<IR::PathExpression>()->path;
+    if (expr->is<IR::Member>()) {
+        const auto *member = expr->to<IR::Member>();
+        auto exprName = member->expr->toString();
+        auto instName = member->member.toString();
+        auto *path = new IR::Path(IR::ID(exprName + "." + instName));
+        return path;
+    }
     BUG("%1%: unexpected expression", expression);
 }
 
