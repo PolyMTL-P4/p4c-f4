@@ -89,7 +89,7 @@ const IR::P4Program *parseP4File(ParserOptions &options) {
     C converter;
     result = result->apply(converter);
 
-    options.file = options.file + ".tmp";
+    options.file = options.file + "-IR.p4";
     Util::PathName path(options.file);
     std::ostream *ppStream = openFile(path.toString(), true);
     P4::ToP4 top4(ppStream, false, options.file);

@@ -119,13 +119,11 @@ class ExtendP4class : public Transform {
         auto *substituteVars = new std::map<cstring, cstring>();
         if (laClassMap->count(className) > 0) {
             auto lesParams = laParaMap->find(className)->second.parameters;
-            //auto chepakoi = new std::map<cstring, IR::Argument>;
             for (size_t i = 0; i < lesParams.size(); i++) {
                 paramArgMap->emplace(lesParams.at(i)->name.toString(), *(lobjet->arguments->at(i)));
             }
             instanceMap->emplace(instanceName, className);
             auto *renamedDecls = addNameToDecls(&laClassMap->find(className)->second, className, instanceName, substituteVars);
-            //auto visiteur = new ReplaceParameters(paramArgMap);
             const auto *result = renamedDecls->apply(ReplaceParameters(paramArgMap, substituteVars));
             return result;
         }
