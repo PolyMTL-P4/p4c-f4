@@ -1,0 +1,46 @@
+class EfsmState : ISimpleNamespace, Declaration, IAnnotated {
+    optional Annotations                        annotations = Annotations::empty;
+    optional inline IndexedVector<StatOrDecl>   components;
+    // selectExpression can be a SelectExpression, or a PathExpression representing a state
+    NullOK Expression                   selectExpression;
+
+    Annotations getAnnotations() const override { return annotations; }
+    Util::Enumerator<IDeclaration>* getDeclarations() const override {
+        return components.getDeclarations(); }
+    const IDeclaration* getDeclByName(cstring name) const override {
+        return components.getDeclaration(name); }
+
+    static const cstring start;
+    validate{
+        if (selectExpression != nullptr)
+            BUG_CHECK(selectExpression->is<IR::PathExpression>() ||
+                      selectExpression->is<IR::SelectExpression>(),
+                      "%1%: unexpected select expression", selectExpression);
+    }
+}
+
+// A parser that contains all states (unlike the P4 v1.0 parser, which is really just a state)
+class P4Efsm : Declaration, ISimpleNamespace, IAnnotated {
+    optional Annotations                        annotations = Annotations::empty;
+    optional ParameterList                      constructorParams = new ParameterList;
+    optional inline IndexedVector<Declaration>  efsmLocals;
+    optional inline IndexedVector<EfsmState>    states;
+
+    Annotations getAnnotations() const override { return annotations; }
+    Util::Enumerator<IDeclaration>* getDeclarations() const override {
+        return efsmLocals.getDeclarations()->concat(states.getDeclarations()); }
+    IDeclaration getDeclByName(cstring name) const override {
+        auto decl = efsmLocals.getDeclaration(name);
+        if (!decl) decl = states.getDeclaration(name);
+        return decl; }
+    void checkDuplicates() const;
+#apply
+    validate {
+        efsmLocals.check_null();
+        states.check_null();
+        checkDuplicates();
+        for (auto d : efsmLocals)
+            BUG_CHECK(!d->is<EfsmState>(), "%1%: state in locals", d);
+    }
+    toString { return cstring("efsm ") + externalName(); }
+}
