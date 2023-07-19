@@ -50,9 +50,9 @@ class ReplaceMembers : public Transform {
 
     const IR::Node *preorder(IR::Member *elMembre) override {
         auto exprName = elMembre->expr->toString();
-        auto instName = elMembre->member.toString();
-        if (instanceMap->count(exprName) > 0) {
-            auto finalName = instName + "_" + instanceMap->find(exprName)->second + "_" + exprName;
+        auto memberName = elMembre->member.toString();
+        if (auto found = instanceMap->find(exprName); found != instanceMap->end()) {
+            auto finalName = memberName + "_" + found->second + "_" + exprName;
             return new IR::PathExpression(IR::ID(finalName));
         }
         return elMembre;
@@ -69,12 +69,12 @@ class ReplaceParameters : public Transform {
     { setName("ReplaceParameters"); }
 
     const IR::Node *postorder(IR::Expression *lExpr) override {
-        if (paramArgMap->count(lExpr->toString()) > 0) {
-            const auto *newExpr = paramArgMap->find(lExpr->toString())->second.expression;
+        if (auto arg = paramArgMap->find(lExpr->toString()); arg != paramArgMap->end()) {
+            const auto *newExpr = arg->second.expression;
             return newExpr;
         }
-        if (substituteVars->count(lExpr->toString()) > 0) {
-            auto *newPath = new IR::PathExpression(IR::ID(substituteVars->find(lExpr->toString())->second));
+        if (auto newName = substituteVars->find(lExpr->toString()); newName != substituteVars->end()) {
+            auto *newPath = new IR::PathExpression(IR::ID(newName->second));
             return newPath;
         }
         return lExpr;
@@ -120,13 +120,14 @@ class ExtendP4class : public Transform {
         const cstring instanceName = lobjet->Name();
         auto *paramArgMap = new std::map<cstring, IR::Argument>();
         auto *substituteVars = new std::map<cstring, cstring>();
-        if (laClassMap->count(className) > 0) {
-            auto lesParams = laClassMap->find(className)->second.params.parameters;
+        if (auto settingsFound = laClassMap->find(className); settingsFound != laClassMap->end()) {
+            ClassSettings settings = settingsFound->second;
+            auto lesParams = settings.params.parameters;
             for (size_t i = 0; i < lesParams.size(); i++) {
                 paramArgMap->emplace(lesParams.at(i)->name.toString(), *(lobjet->arguments->at(i)));
             }
             instanceMap->emplace(instanceName, className);
-            auto *renamedDecls = addNameToDecls(&laClassMap->find(className)->second.decls, className, instanceName, substituteVars);
+            auto *renamedDecls = addNameToDecls(&settings.decls, className, instanceName, substituteVars);
             const auto *result = renamedDecls->apply(ReplaceParameters(paramArgMap, substituteVars));
             return result;
         }
