@@ -35,6 +35,11 @@ limitations under the License.
 
 namespace F4 {
 
+struct ClassSettings{
+    IR::IndexedVector<IR::Declaration> decls;
+    IR::ParameterList                  params;
+};
+
 class ReplaceMembers : public Transform {
     std::map<cstring, cstring> *instanceMap;
 
@@ -77,25 +82,24 @@ class ReplaceParameters : public Transform {
 };
 
 class RegisterClass : public Transform {
-    std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
-    std::map<cstring, IR::ParameterList> *laParaMap;
+    std::map<cstring, ClassSettings> *laClassMap;
 
  public:
-    explicit RegisterClass(std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap,
-                           std::map<cstring, IR::ParameterList> *laParaMap)
-        : laClassMap(laClassMap), laParaMap(laParaMap)
+    explicit RegisterClass(std::map<cstring, ClassSettings> *laClassMap)
+        : laClassMap(laClassMap)
         { setName("RegisterClass"); }
 
     const IR::Node *preorder(IR::P4Class *laclass) override {
-        laClassMap->emplace(laclass->name.toString(), laclass->localDeclarations);
-        laParaMap->emplace(laclass->name.toString(), *(laclass->getParameters()));
+        ClassSettings settings; 
+        settings.decls = laclass->localDeclarations;
+        settings.params = *(laclass->getParameters());
+        laClassMap->emplace(laclass->name.toString(), settings);
         return nullptr;
     }
 };
 
 class ExtendP4class : public Transform {
-    std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
-    std::map<cstring, IR::ParameterList> *laParaMap;
+    std::map<cstring, ClassSettings> *laClassMap;
     std::map<cstring, cstring> *instanceMap;
     std::map<cstring, IR::Argument> *paramArgMap{};
     std::map<cstring, cstring> *substituteVars{};
@@ -106,10 +110,9 @@ class ExtendP4class : public Transform {
                                                 std::map<cstring, cstring> *substituteVars);
 
  public:
-    explicit ExtendP4class(std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap,
-                           std::map<cstring, IR::ParameterList> *laParaMap,
+    explicit ExtendP4class(std::map<cstring, ClassSettings> *laClassMap,
                            std::map<cstring, cstring> *instanceMap)
-        : laClassMap(laClassMap), laParaMap(laParaMap), instanceMap(instanceMap)
+        : laClassMap(laClassMap), instanceMap(instanceMap)
         { setName("ExtendP4Class"); }
 
     const IR::Node *preorder(IR::Declaration_Instance *lobjet) override {
@@ -118,12 +121,12 @@ class ExtendP4class : public Transform {
         auto *paramArgMap = new std::map<cstring, IR::Argument>();
         auto *substituteVars = new std::map<cstring, cstring>();
         if (laClassMap->count(className) > 0) {
-            auto lesParams = laParaMap->find(className)->second.parameters;
+            auto lesParams = laClassMap->find(className)->second.params.parameters;
             for (size_t i = 0; i < lesParams.size(); i++) {
                 paramArgMap->emplace(lesParams.at(i)->name.toString(), *(lobjet->arguments->at(i)));
             }
             instanceMap->emplace(instanceName, className);
-            auto *renamedDecls = addNameToDecls(&laClassMap->find(className)->second, className, instanceName, substituteVars);
+            auto *renamedDecls = addNameToDecls(&laClassMap->find(className)->second.decls, className, instanceName, substituteVars);
             const auto *result = renamedDecls->apply(ReplaceParameters(paramArgMap, substituteVars));
             return result;
         }
@@ -147,8 +150,7 @@ class Converter : public PassManager {
     Visitor::profile_t init_apply(const IR::Node *node) override;
     
  private:
-    std::map<cstring, IR::IndexedVector<IR::Declaration>> *laClassMap;
-    std::map<cstring, IR::ParameterList> *laParaMap;
+    std::map<cstring, ClassSettings> *laClassMap;
     std::map<cstring, cstring> *instanceMap;
 };
 
