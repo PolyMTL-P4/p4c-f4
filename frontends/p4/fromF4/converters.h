@@ -41,21 +41,21 @@ struct ClassSettings{
 };
 
 class ReplaceMembers : public Transform {
-    std::map<cstring, cstring> *instanceMap;
+    std::map<cstring, cstring> *instanceToClassNameMap;
 
  public:
-    explicit ReplaceMembers(std::map<cstring, cstring> *instanceMap) : instanceMap(instanceMap) {
+    explicit ReplaceMembers(std::map<cstring, cstring> *instanceToClassNameMap) : instanceToClassNameMap(instanceToClassNameMap) {
         setName("ReplaceMembers");
     }
 
-    const IR::Node *preorder(IR::Member *elMembre) override {
-        auto exprName = elMembre->expr->toString();
-        auto memberName = elMembre->member.toString();
-        if (auto found = instanceMap->find(exprName); found != instanceMap->end()) {
+    const IR::Node *preorder(IR::Member *IRmember) override {
+        auto exprName = IRmember->expr->toString();
+        auto memberName = IRmember->member.toString();
+        if (auto found = instanceToClassNameMap->find(exprName); found != instanceToClassNameMap->end()) {
             auto finalName = memberName + "_" + found->second + "_" + exprName;
             return new IR::PathExpression(IR::ID(finalName));
         }
-        return elMembre;
+        return IRmember;
     }
 };
 
@@ -68,39 +68,39 @@ class ReplaceParameters : public Transform {
     explicit ReplaceParameters(std::map<cstring, IR::Argument> *paramArgMap, std::map<cstring, cstring> *substituteVars) : paramArgMap(paramArgMap), substituteVars(substituteVars)
     { setName("ReplaceParameters"); }
 
-    const IR::Node *postorder(IR::Expression *lExpr) override {
-        if (auto arg = paramArgMap->find(lExpr->toString()); arg != paramArgMap->end()) {
-            const auto *newExpr = arg->second.expression;
+    const IR::Node *postorder(IR::Expression *expr) override {
+        if (auto argFound = paramArgMap->find(expr->toString()); argFound != paramArgMap->end()) {
+            const auto *newExpr = argFound->second.expression;
             return newExpr;
         }
-        if (auto newName = substituteVars->find(lExpr->toString()); newName != substituteVars->end()) {
-            auto *newPath = new IR::PathExpression(IR::ID(newName->second));
+        if (auto newNameFound = substituteVars->find(expr->toString()); newNameFound != substituteVars->end()) {
+            auto *newPath = new IR::PathExpression(IR::ID(newNameFound->second));
             return newPath;
         }
-        return lExpr;
+        return expr;
     }
 };
 
 class RegisterClass : public Transform {
-    std::map<cstring, ClassSettings> *laClassMap;
+    std::map<cstring, ClassSettings> *classSettingsMap;
 
  public:
-    explicit RegisterClass(std::map<cstring, ClassSettings> *laClassMap)
-        : laClassMap(laClassMap)
+    explicit RegisterClass(std::map<cstring, ClassSettings> *classSettingsMap)
+        : classSettingsMap(classSettingsMap)
         { setName("RegisterClass"); }
 
-    const IR::Node *preorder(IR::P4Class *laclass) override {
+    const IR::Node *preorder(IR::P4Class *laClass) override {
         ClassSettings settings; 
-        settings.decls = laclass->localDeclarations;
-        settings.params = *(laclass->getParameters());
-        laClassMap->emplace(laclass->name.toString(), settings);
+        settings.decls = laClass->localDeclarations;
+        settings.params = *(laClass->getParameters());
+        classSettingsMap->emplace(laClass->name.toString(), settings);
         return nullptr;
     }
 };
 
 class ExtendP4class : public Transform {
-    std::map<cstring, ClassSettings> *laClassMap;
-    std::map<cstring, cstring> *instanceMap;
+    std::map<cstring, ClassSettings> *classSettingsMap;
+    std::map<cstring, cstring> *instanceToClassNameMap;
 
  protected:
     static IR::IndexedVector<IR::Declaration> *addNameToDecls (IR::IndexedVector<IR::Declaration> *ref,
@@ -108,34 +108,34 @@ class ExtendP4class : public Transform {
                                                 std::map<cstring, cstring> *substituteVars);
 
  public:
-    explicit ExtendP4class(std::map<cstring, ClassSettings> *laClassMap,
-                           std::map<cstring, cstring> *instanceMap)
-        : laClassMap(laClassMap), instanceMap(instanceMap)
+    explicit ExtendP4class(std::map<cstring, ClassSettings> *classSettingsMap,
+                           std::map<cstring, cstring> *instanceToClassNameMap)
+        : classSettingsMap(classSettingsMap), instanceToClassNameMap(instanceToClassNameMap)
         { setName("ExtendP4Class"); }
 
-    const IR::Node *preorder(IR::Declaration_Instance *lobjet) override {
-        const cstring className = lobjet->type->toString();
-        const cstring instanceName = lobjet->Name();
+    const IR::Node *preorder(IR::Declaration_Instance *object) override {
+        const cstring className = object->type->toString();
+        const cstring instanceName = object->Name();
         std::map<cstring, IR::Argument> paramArgMap;
         std::map<cstring, cstring> substituteVars;
 
-        if (auto settingsFound = laClassMap->find(className); settingsFound != laClassMap->end()) {
+        if (auto settingsFound = classSettingsMap->find(className); settingsFound != classSettingsMap->end()) {
             ClassSettings settings = settingsFound->second;
-            auto lesParams = settings.params.parameters;
-            for (size_t i = 0; i < lesParams.size(); i++) {
-                paramArgMap.emplace(lesParams.at(i)->name.toString(), *(lobjet->arguments->at(i)));
+            auto paramsVector = settings.params.parameters;
+            for (size_t i = 0; i < paramsVector.size(); i++) {
+                paramArgMap.emplace(paramsVector.at(i)->name.toString(), *(object->arguments->at(i)));
             }
-            instanceMap->emplace(instanceName, className);
+            instanceToClassNameMap->emplace(instanceName, className);
             auto *renamedDecls = addNameToDecls(&settings.decls, className, instanceName, &substituteVars);
             const auto *result = renamedDecls->apply(ReplaceParameters(&paramArgMap, &substituteVars));
             return result;
         }
-            return lobjet;
+            return object;
     }
 
-    const IR::Node *preorder(IR::Expression *lecall) override {
-        const auto *newCall = lecall->clone();
-        newCall = newCall->apply(ReplaceMembers(instanceMap));
+    const IR::Node *preorder(IR::Expression *call) override {
+        const auto *newCall = call->clone();
+        newCall = newCall->apply(ReplaceMembers(instanceToClassNameMap));
         return newCall;
     }
 };
@@ -150,8 +150,8 @@ class Converter : public PassManager {
     Visitor::profile_t init_apply(const IR::Node *node) override;
     
  private:
-    std::map<cstring, ClassSettings> *laClassMap;
-    std::map<cstring, cstring> *instanceMap;
+    std::map<cstring, ClassSettings> *classSettingsMap;
+    std::map<cstring, cstring> *instanceToClassNameMap;
 };
 
 } // namespace F4

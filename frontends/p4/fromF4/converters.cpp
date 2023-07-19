@@ -45,12 +45,12 @@ IR::IndexedVector<IR::Declaration> *ExtendP4class::addNameToDecls (IR::IndexedVe
     return result;
 }
 
-Converter::Converter() : laClassMap(new std::map<cstring, ClassSettings>()),
-                         instanceMap(new std::map<cstring, cstring>()) {
+Converter::Converter() : classSettingsMap(new std::map<cstring, ClassSettings>()),
+                         instanceToClassNameMap(new std::map<cstring, cstring>()) {
     setName("Converter");
 
-    passes.emplace_back(new RegisterClass(laClassMap));
-    passes.emplace_back(new ExtendP4class(laClassMap, instanceMap));
+    passes.emplace_back(new RegisterClass(classSettingsMap));
+    passes.emplace_back(new ExtendP4class(classSettingsMap, instanceToClassNameMap));
 }
 
 Visitor::profile_t Converter::init_apply(const IR::Node *node) {
