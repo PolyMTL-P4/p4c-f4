@@ -101,8 +101,6 @@ class RegisterClass : public Transform {
 class ExtendP4class : public Transform {
     std::map<cstring, ClassSettings> *laClassMap;
     std::map<cstring, cstring> *instanceMap;
-    std::map<cstring, IR::Argument> *paramArgMap{};
-    std::map<cstring, cstring> *substituteVars{};
 
  protected:
     static IR::IndexedVector<IR::Declaration> *addNameToDecls (IR::IndexedVector<IR::Declaration> *ref,
@@ -118,17 +116,18 @@ class ExtendP4class : public Transform {
     const IR::Node *preorder(IR::Declaration_Instance *lobjet) override {
         const cstring className = lobjet->type->toString();
         const cstring instanceName = lobjet->Name();
-        auto *paramArgMap = new std::map<cstring, IR::Argument>();
-        auto *substituteVars = new std::map<cstring, cstring>();
+        std::map<cstring, IR::Argument> paramArgMap;
+        std::map<cstring, cstring> substituteVars;
+
         if (auto settingsFound = laClassMap->find(className); settingsFound != laClassMap->end()) {
             ClassSettings settings = settingsFound->second;
             auto lesParams = settings.params.parameters;
             for (size_t i = 0; i < lesParams.size(); i++) {
-                paramArgMap->emplace(lesParams.at(i)->name.toString(), *(lobjet->arguments->at(i)));
+                paramArgMap.emplace(lesParams.at(i)->name.toString(), *(lobjet->arguments->at(i)));
             }
             instanceMap->emplace(instanceName, className);
-            auto *renamedDecls = addNameToDecls(&settings.decls, className, instanceName, substituteVars);
-            const auto *result = renamedDecls->apply(ReplaceParameters(paramArgMap, substituteVars));
+            auto *renamedDecls = addNameToDecls(&settings.decls, className, instanceName, &substituteVars);
+            const auto *result = renamedDecls->apply(ReplaceParameters(&paramArgMap, &substituteVars));
             return result;
         }
             return lobjet;
