@@ -934,6 +934,7 @@ controlLocalDeclaration
     | instantiation            { $$ = $1; }
     | variableDeclaration      { $$ = $1; }
     | p4classDeclaration       { $$ = $1; }
+    | efsmDeclaration          { $$ = $1; }
     ;
 
 controlBody
