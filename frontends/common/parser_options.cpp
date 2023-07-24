@@ -184,7 +184,7 @@ ParserOptions::ParserOptions() : Util::Options(defaultMessage) {
             }
             return true;
         },
-        "Specify backend to translate EFSM.");
+        "Specify backend used to translate EFSM.");
     registerOption(
         "--nocpp", nullptr,
         [this](const char *) {
