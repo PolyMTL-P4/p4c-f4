@@ -23,6 +23,7 @@ limitations under the License.
 #include <typeinfo>
 #include <utility>
 
+#include "frontends/common/parser_options.h"
 #include "frontends/p4/coreLibrary.h"
 #include "ir/dump.h"
 #include "ir/indexed_vector.h"
@@ -137,12 +138,18 @@ class ExtendP4class : public Transform {
     }
 };
 
+class EfsmToFlowBlaze : public Transform {
+};
+
+class EfsmToDfaSynthesis : public Transform {
+};
+
 ///////////////////////////////////////////////////////////////
 
 // Is fed a F4 program and outputs an equivalent P4-16 program
 class Converter : public PassManager {
  public:
-    Converter();
+    explicit Converter(ParserOptions::EfsmBackendType efsmBackend);
     void loadModel() {}
     Visitor::profile_t init_apply(const IR::Node *node) override;
     

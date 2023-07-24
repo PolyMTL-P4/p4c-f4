@@ -64,7 +64,7 @@ static const IR::P4Program *parseV1Program(Input &stream, const char *sourceFile
  * @return a P4-16 IR tree representing the contents of the given file, or null
  * on failure. If failure occurs, an error will also be reported.
  */
-template <typename C = F4::Converter>
+template <typename C = P4V1::Converter>
 const IR::P4Program *parseP4File(ParserOptions &options) {
     BUG_CHECK(&options == &P4CContext::get().options(),
               "Parsing using options that don't match the current "
@@ -88,7 +88,7 @@ const IR::P4Program *parseP4File(ParserOptions &options) {
     options.closeInput(in);
 
     if (options.isf4()) {
-        C converter;
+        F4::Converter converter(options.efsmBackend);
         result = result->apply(converter);
 
         options.file = options.file + "-IR.p4";

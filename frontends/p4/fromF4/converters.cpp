@@ -19,6 +19,7 @@ limitations under the License.
 
 #include "frontends/common/constantFolding.h"
 #include "frontends/common/options.h"
+#include "frontends/common/parser_options.h"
 #include "frontends/common/resolveReferences/referenceMap.h"
 #include "frontends/common/resolveReferences/resolveReferences.h"
 #include "frontends/p4/coreLibrary.h"
@@ -45,13 +46,18 @@ IR::IndexedVector<IR::Declaration> *ExtendP4class::addNameToDecls (IR::IndexedVe
     return result;
 }
 
-Converter::Converter() : laClassMap(new std::map<cstring, IR::IndexedVector<IR::Declaration>>()),
+Converter::Converter(ParserOptions::EfsmBackendType efsmBackend) : laClassMap(new std::map<cstring, IR::IndexedVector<IR::Declaration>>()),
                          laParaMap(new std::map<cstring, IR::ParameterList>()),
                          instanceMap(new std::map<cstring, cstring>()) {
     setName("Converter");
 
     passes.emplace_back(new RegisterClass(laClassMap, laParaMap));
     passes.emplace_back(new ExtendP4class(laClassMap, laParaMap, instanceMap));
+    if (efsmBackend == ParserOptions::EfsmBackendType::FLOWBLAZE_P4) {
+        passes.emplace_back(new EfsmToFlowBlaze());
+    } else if (efsmBackend == ParserOptions::EfsmBackendType::DFA_SYNTHESIS) {
+        passes.emplace_back(new EfsmToDfaSynthesis());
+    }
 }
 
 Visitor::profile_t Converter::init_apply(const IR::Node *node) {
