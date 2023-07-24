@@ -84,40 +84,45 @@ const IR::P4Program *parseP4File(ParserOptions &options) {
     auto result = options.isv1()
                       ? parseV1Program<FILE *, C>(in, options.file, 1, options.getDebugHook())
                       : P4ParserDriver::parse(in, options.file);
+
     options.closeInput(in);
 
-    C converter;
-    result = result->apply(converter);
+    if (options.isf4()) {
+        C converter;
+        result = result->apply(converter);
 
-    options.file = options.file + "-IR.p4";
-    Util::PathName path(options.file);
-    std::ostream *ppStream = openFile(path.toString(), true);
-    P4::ToP4 top4(ppStream, false, options.file);
-    (void)result->apply(top4);
+        options.file = options.file + "-IR.p4";
+        Util::PathName path(options.file);
+        std::ostream *ppStream = openFile(path.toString(), true);
+        P4::ToP4 top4(ppStream, false, options.file);
+        result->apply(top4);
 
-    FILE *in2 = nullptr;
-    if (options.doNotPreprocess) {
-        in2 = fopen(options.file, "r");
-        if (in2 == nullptr) {
-            ::error(ErrorType::ERR_NOT_FOUND, "%1%: No such file or directory.", options.file);
+        FILE *in2 = nullptr;
+        if (options.doNotPreprocess) {
+            in2 = fopen(options.file, "r");
+            if (in2 == nullptr) {
+                ::error(ErrorType::ERR_NOT_FOUND, "%1%: No such file or directory.", options.file);
+                return nullptr;
+            }
+        } else {
+            in2 = options.preprocess();
+            if (::errorCount() > 0 || in2 == nullptr) return nullptr;
+        }
+
+        const auto *result2 = P4::P4ParserDriver::parse(in2, options.file);
+
+        options.closeInput(in2);
+        
+        if (::errorCount() > 0) {
+            ::error(ErrorType::ERR_OVERLIMIT, "%1% errors encountered, aborting compilation",
+                    ::errorCount());
             return nullptr;
         }
-    } else {
-        in2 = options.preprocess();
-        if (::errorCount() > 0 || in2 == nullptr) return nullptr;
+        BUG_CHECK(result2 != nullptr, "Parsing failed, but we didn't report an error");
+        return result2;
     }
-
-    const auto *result2 = P4::P4ParserDriver::parse(in2, options.file);
-
-    options.closeInput(in2);
-
-    if (::errorCount() > 0) {
-        ::error(ErrorType::ERR_OVERLIMIT, "%1% errors encountered, aborting compilation",
-                ::errorCount());
-        return nullptr;
-    }
-    BUG_CHECK(result2 != nullptr, "Parsing failed, but we didn't report an error");
-    return result2;
+    
+    return result;
 }
 
 /**
