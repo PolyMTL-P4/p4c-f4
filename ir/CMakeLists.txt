@@ -20,6 +20,7 @@ set (IR_SRCS
   dbprint-type.cpp
   dbprint-p4.cpp
   dump.cpp
+  efsm.cpp
   expression.cpp
   ir.cpp
   irutils.cpp
@@ -61,7 +62,7 @@ set (BASE_IR_DEF_FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/v1.def
 )
 
-set (IR_DEF_FILES ${IR_DEF_FILES} ${BASE_IR_DEF_FILES} PARENT_SCOPE)
+set (IR_DEF_FILES ${IR_DEF_FILES} ${BASE_IR_DEF_FILES} ${CMAKE_CURRENT_SOURCE_DIR}/efsm.def PARENT_SCOPE)
 
 add_library (ir STATIC ${IR_SRCS})
 add_dependencies(ir genIR)

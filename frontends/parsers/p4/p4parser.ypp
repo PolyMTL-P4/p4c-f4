@@ -221,7 +221,7 @@ inline std::ostream& operator<<(std::ostream& out, const P4::Token& t) {
 %token<Token>      DOTS "..."
 %token<Token>      RANGE ".."
 %token<Token>      TRUE FALSE THIS
-%token<Token>      ABSTRACT ACTION ACTIONS APPLY BOOL BIT CONST CONTROL DEFAULT
+%token<Token>      ABSTRACT ACTION ACTIONS APPLY BOOL BIT CONST CONTROL DEFAULT EFSM
                    ELSE ENTRIES ENUM ERROR EXIT EXTERN HEADER HEADER_UNION IF IN INOUT
                    INT KEY  LIST SELECT MATCH_KIND TYPE OUT P4CLASS PACKAGE PARSER PRAGMA RETURN STATE
                    STRING STRUCT SWITCH TABLE TRANSITION TUPLE TYPEDEF VARBIT VALUESET VOID
@@ -275,11 +275,13 @@ inline std::ostream& operator<<(std::ostream& out, const P4::Token& t) {
 %type<IR::Vector<IR::Type>*>  typeArgumentList realTypeArgumentList
 %type<IR::ParserState*>     parserState
 %type<IR::IndexedVector<IR::ParserState>*>  parserStates
+%type<IR::EfsmState*>       efsmState
+%type<IR::IndexedVector<IR::EfsmState>*>    efsmStates
 %type<IR::Declaration*>     constantDeclaration actionDeclaration
                             variableDeclaration instantiation functionDeclaration
                             objDeclaration tableDeclaration controlLocalDeclaration
                             parserLocalElement valueSetDeclaration p4classDeclaration
-                            p4classLocalDeclaration
+                            p4classLocalDeclaration efsmDeclaration
 %type<IR::Type_Declaration*>  headerTypeDeclaration structTypeDeclaration
                               headerUnionDeclaration derivedTypeDeclaration
                               parserDeclaration controlDeclaration enumDeclaration
@@ -453,6 +455,7 @@ declaration
     | externDeclaration       { $$ = $1; }
     | actionDeclaration       { $$ = $1; }
     | parserDeclaration       { $$ = $1; }
+    | efsmDeclaration         { $$ = $1; }
     | typeDeclaration         { $$ = $1; }
     | controlDeclaration      { $$ = $1; }
     | p4classDeclaration      { $$ = $1; }
@@ -556,6 +559,7 @@ annotationToken
     | CONST            { $$ = $1; }
     | CONTROL          { $$ = $1; }
     | DEFAULT          { $$ = $1; }
+    | EFSM             { $$ = $1; }
     | ELSE             { $$ = $1; }
     | ENTRIES          { $$ = $1; }
     | ENUM             { $$ = $1; }
@@ -733,6 +737,29 @@ dotPrefix
     : "."                      { driver.structure->startAbsolutePath(); }
     ;
 
+/***************************** EFSM *******************************/
+
+efsmDeclaration
+    : optAnnotations EFSM name "(" parameterList ")" optConstructorParameters
+      "{" parserLocalElements efsmStates "}"
+                            { //driver.structure->pushContainerType(*$3, true);
+                              //driver.structure->declareParameters($5);
+                              auto pl = new IR::ParameterList(@5, *$5);
+                              $$ = new IR::P4Efsm(@3, *$3, pl, *$9, *$10);}
+
+efsmStates
+    : efsmState                     { $$ = new IR::IndexedVector<IR::EfsmState>();
+                                        $$->push_back($1); $$->srcInfo = @1; }
+    | efsmStates efsmState        { $$ = $1; $$->push_back($2); $$->srcInfo = @1 + @2; }
+    ;
+
+efsmState
+    : optAnnotations STATE name { driver.structure->pushContainerType(*$3, false); }
+      "{" parserStatements transitionStatement "}"
+                                      { driver.structure->pop();
+                                        $$ = new IR::EfsmState(@3, *$3, $1, *$6, $7); }
+    ;
+
 /**************************** PARSER ******************************/
 
 parserDeclaration
@@ -907,6 +934,7 @@ controlLocalDeclaration
     | instantiation            { $$ = $1; }
     | variableDeclaration      { $$ = $1; }
     | p4classDeclaration       { $$ = $1; }
+    | efsmDeclaration          { $$ = $1; }
     ;
 
 controlBody

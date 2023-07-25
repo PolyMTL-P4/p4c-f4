@@ -52,11 +52,14 @@ class ParserOptions : public Util::Options {
  public:
     ParserOptions();
     std::vector<const char *> *process(int argc, char *const argv[]) override;
-    enum class FrontendVersion { P4_14, P4_16 };
+    enum class FrontendVersion { P4_14, P4_16, F4 };
+    enum class EfsmBackendType {FLOWBLAZE_P4, DFA_SYNTHESIS};
     // Name of executable that is being run.
     cstring exe_name;
     // Which language to compile
     FrontendVersion langVersion = FrontendVersion::P4_16;
+    // EFSM translation backend
+    EfsmBackendType efsmBackend = EfsmBackendType::FLOWBLAZE_P4;
     // options to pass to preprocessor
     cstring preprocessor_options = "";
     // file to compile (- for stdin)
@@ -83,6 +86,8 @@ class ParserOptions : public Util::Options {
     void closeInput(FILE *input) const;
     // True if we are compiling a P4 v1.0 or v1.1 program
     bool isv1() const;
+    // True if we are compiling with F4 (P4 extensions)
+    bool isf4() const;
     // Get a debug hook function suitable for insertion
     // in the pass managers that are executed.
     DebugHook getDebugHook() const;
