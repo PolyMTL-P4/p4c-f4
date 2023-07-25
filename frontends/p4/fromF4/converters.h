@@ -142,6 +142,19 @@ class ExtendP4class : public Transform {
 };
 
 class EfsmToFlowBlaze : public Transform {
+    // Generate commands to populate tables
+
+    const IR::Node *preorder(IR::P4Efsm *efsm) override {
+        std::cout << efsm->states.toString() << std::endl;
+        for (const auto *state : efsm->states) {
+            std::cout << state->toString() << std::endl;
+            for (const auto *d : state->components) {
+                std::cout << d->toString() << std::endl;
+            }
+            std::cout << state->selectExpression->toString() << std::endl;
+        }
+        return nullptr;
+    }
 };
 
 class EfsmToDfaSynthesis : public Transform {
