@@ -49,15 +49,7 @@ class ReplaceMembers : public Transform {
         setName("ReplaceMembers");
     }
 
-    const IR::Node *preorder(IR::Member *IRmember) override {
-        auto exprName = IRmember->expr->toString();
-        auto memberName = IRmember->member.toString();
-        if (auto found = instanceToClassNameMap->find(exprName); found != instanceToClassNameMap->end()) {
-            auto finalName = memberName + "_" + found->second + "_" + exprName;
-            return new IR::PathExpression(IR::ID(finalName));
-        }
-        return IRmember;
-    }
+    const IR::Node *preorder(IR::Member *IRmember) override;
 };
 
 
@@ -69,17 +61,7 @@ class ReplaceParameters : public Transform {
     explicit ReplaceParameters(std::map<cstring, IR::Argument> *paramArgMap, std::map<cstring, cstring> *substituteVars) : paramArgMap(paramArgMap), substituteVars(substituteVars)
     { setName("ReplaceParameters"); }
 
-    const IR::Node *postorder(IR::Expression *expr) override {
-        if (auto argFound = paramArgMap->find(expr->toString()); argFound != paramArgMap->end()) {
-            const auto *newExpr = argFound->second.expression;
-            return newExpr;
-        }
-        if (auto newNameFound = substituteVars->find(expr->toString()); newNameFound != substituteVars->end()) {
-            auto *newPath = new IR::PathExpression(IR::ID(newNameFound->second));
-            return newPath;
-        }
-        return expr;
-    }
+    const IR::Node *postorder(IR::Expression *expr) override;
 };
 
 class RegisterClass : public Transform {
@@ -90,16 +72,10 @@ class RegisterClass : public Transform {
         : classSettingsMap(classSettingsMap)
         { setName("RegisterClass"); }
 
-    const IR::Node *preorder(IR::P4Class *laClass) override {
-        ClassSettings settings; 
-        settings.decls = laClass->localDeclarations;
-        settings.params = *(laClass->getParameters());
-        classSettingsMap->emplace(laClass->name.toString(), settings);
-        return nullptr;
-    }
+    const IR::Node *preorder(IR::P4Class *laClass) override;
 };
 
-class ExtendP4class : public Transform {
+class ExtendP4Class : public Transform {
     std::map<cstring, ClassSettings> *classSettingsMap;
     std::map<cstring, cstring> *instanceToClassNameMap;
 
@@ -109,36 +85,14 @@ class ExtendP4class : public Transform {
                                                 std::map<cstring, cstring> *substituteVars);
 
  public:
-    explicit ExtendP4class(std::map<cstring, ClassSettings> *classSettingsMap,
+    explicit ExtendP4Class(std::map<cstring, ClassSettings> *classSettingsMap,
                            std::map<cstring, cstring> *instanceToClassNameMap)
         : classSettingsMap(classSettingsMap), instanceToClassNameMap(instanceToClassNameMap)
         { setName("ExtendP4Class"); }
 
-    const IR::Node *preorder(IR::Declaration_Instance *object) override {
-        const cstring className = object->type->toString();
-        const cstring instanceName = object->Name();
-        std::map<cstring, IR::Argument> paramArgMap;
-        std::map<cstring, cstring> substituteVars;
+    const IR::Node *preorder(IR::Declaration_Instance *object) override;
 
-        if (auto settingsFound = classSettingsMap->find(className); settingsFound != classSettingsMap->end()) {
-            ClassSettings settings = settingsFound->second;
-            auto paramsVector = settings.params.parameters;
-            for (size_t i = 0; i < paramsVector.size(); i++) {
-                paramArgMap.emplace(paramsVector.at(i)->name.toString(), *(object->arguments->at(i)));
-            }
-            instanceToClassNameMap->emplace(instanceName, className);
-            auto *renamedDecls = addNameToDecls(&settings.decls, className, instanceName, &substituteVars);
-            const auto *result = renamedDecls->apply(ReplaceParameters(&paramArgMap, &substituteVars));
-            return result;
-        }
-            return object;
-    }
-
-    const IR::Node *preorder(IR::Expression *call) override {
-        const auto *newCall = call->clone();
-        newCall = newCall->apply(ReplaceMembers(instanceToClassNameMap));
-        return newCall;
-    }
+    const IR::Node *preorder(IR::Expression *call) override;
 };
 
 class EfsmToFlowBlaze : public Transform {
