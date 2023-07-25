@@ -168,25 +168,6 @@ void IR::P4Class::dbprint(std::ostream &out) const {
         for (auto p : controlLocals->components) out << Log::endl << p;*/
     out << unindent << " }";
 }
-void IR::EfsmState::dbprint(std::ostream &out) const {
-    out << "state " << name << " " << annotations << "{" << indent;
-    for (auto s : components) out << Log::endl << s;
-    if (selectExpression) out << Log::endl << selectExpression;
-    out << " }" << unindent;
-}
-void IR::P4Efsm::dbprint(std::ostream &out) const {
-    out << "p4class " << name << "(";
-    const char *sep = "";
-    for (auto arg : constructorParams->parameters) {
-        out << sep << arg->direction << ' ' << arg->type << ' ' << arg->name;
-        sep = ", ";
-    }
-    out << ") {" << indent;
-    for (auto d : efsmLocals) out << Log::endl << d;
-    /*if (controlLocals)
-        for (auto p : controlLocals->components) out << Log::endl << p;*/
-    out << unindent << " }";
-}
 
 void IR::BlockStatement::dbprint(std::ostream &out) const {
     out << "{" << indent;

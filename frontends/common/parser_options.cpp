@@ -156,14 +156,12 @@ ParserOptions::ParserOptions() : Util::Options(defaultMessage) {
         },
         "[Deprecated; use --std instead] Specify language version to compile.", OptionFlags::Hide);
     registerOption(
-        "--std", "{p4-14|p4-16|f4}",
+        "--std", "{p4-14|p4-16}",
         [this](const char *arg) {
             if (!strcmp(arg, "14") || !strcmp(arg, "p4-14")) {
                 langVersion = ParserOptions::FrontendVersion::P4_14;
             } else if (!strcmp(arg, "16") || !strcmp(arg, "p4-16")) {
                 langVersion = ParserOptions::FrontendVersion::P4_16;
-            } else if (!strcmp(arg, "f4")) {
-                langVersion = ParserOptions::FrontendVersion::F4;
             } else {
                 ::error(ErrorType::ERR_INVALID, "Illegal language version %1%", arg);
                 return false;
@@ -171,20 +169,6 @@ ParserOptions::ParserOptions() : Util::Options(defaultMessage) {
             return true;
         },
         "Specify language version to compile.");
-    registerOption(
-        "--efsm", "{dfa|fb}",
-        [this](const char *arg) {
-            if (!strcmp(arg, "fb")) {
-                efsmBackend = ParserOptions::EfsmBackendType::FLOWBLAZE_P4;
-            } else if (!strcmp(arg, "dfa")) {
-                efsmBackend = ParserOptions::EfsmBackendType::DFA_SYNTHESIS;
-            } else {
-                ::error(ErrorType::ERR_INVALID, "Illegal backend type %1%", arg);
-                return false;
-            }
-            return true;
-        },
-        "Specify backend to translate EFSM.");
     registerOption(
         "--nocpp", nullptr,
         [this](const char *) {
@@ -455,8 +439,6 @@ static cstring makeFileName(cstring folder, cstring name, cstring baseSuffix) {
 }
 
 bool ParserOptions::isv1() const { return langVersion == ParserOptions::FrontendVersion::P4_14; }
-
-bool ParserOptions::isf4() const { return langVersion == ParserOptions::FrontendVersion::F4; }
 
 void ParserOptions::dumpPass(const char *manager, unsigned seq, const char *pass,
                              const IR::Node *node) const {
