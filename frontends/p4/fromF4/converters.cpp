@@ -46,18 +46,18 @@ IR::IndexedVector<IR::Declaration> *ExtendP4class::addNameToDecls (IR::IndexedVe
     return result;
 }
 
-Converter::Converter(ParserOptions::EfsmBackendType efsmBackend) : laClassMap(new std::map<cstring, IR::IndexedVector<IR::Declaration>>()),
-                         laParaMap(new std::map<cstring, IR::ParameterList>()),
-                         instanceMap(new std::map<cstring, cstring>()) {
+Converter::Converter(ParserOptions::EfsmBackendType efsmBackend) : classSettingsMap(new std::map<cstring, ClassSettings>()),
+                         instanceToClassNameMap(new std::map<cstring, cstring>()) {
     setName("Converter");
 
-    passes.emplace_back(new RegisterClass(laClassMap, laParaMap));
-    passes.emplace_back(new ExtendP4class(laClassMap, laParaMap, instanceMap));
+    passes.emplace_back(new RegisterClass(classSettingsMap));
+    passes.emplace_back(new ExtendP4class(classSettingsMap, instanceToClassNameMap));
     if (efsmBackend == ParserOptions::EfsmBackendType::FLOWBLAZE_P4) {
         passes.emplace_back(new EfsmToFlowBlaze());
     } else if (efsmBackend == ParserOptions::EfsmBackendType::DFA_SYNTHESIS) {
         passes.emplace_back(new EfsmToDfaSynthesis());
     }
+
 }
 
 Visitor::profile_t Converter::init_apply(const IR::Node *node) {
