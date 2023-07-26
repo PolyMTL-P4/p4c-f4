@@ -16,6 +16,7 @@ limitations under the License.
 
 #include "converters.h"
 #include <map>
+#include <vector>
 
 #include "frontends/common/constantFolding.h"
 #include "frontends/common/options.h"
@@ -100,6 +101,34 @@ IR::IndexedVector<IR::Declaration> *ExtendP4Class::addNameToDecls (IR::IndexedVe
         result->push_back(newDecl);
     }
     return result;
+}
+
+const IR::Node *EfsmToDfaSynthesis::preorder(IR::P4Efsm *efsm) {
+
+    //IR::IndexedVector<IR::EfsmState> statesNames;
+    std::map<cstring, int> stateToID;
+    std::map<std::pair<cstring, cstring>, cstring> srcToSymbolToDst;
+    std::vector<cstring> sigma;
+
+    int i = 1;
+    for (const auto *state : efsm->states) {
+        if (strcmp(state->name.toString(), "start") == 0) {
+            stateToID.emplace(state->name.toString(), 0);
+        } else {
+            stateToID.emplace(state->name.toString(), i);
+            i++;
+        }
+        if (state->selectExpression->is<IR::SelectExpression>()) {
+            for (const auto *const sCase : state->selectExpression->as<IR::SelectExpression>().selectCases) {
+                cstring transitionSymbol = sCase->keyset->toString();
+                if (std::find(sigma.begin(), sigma.end(), transitionSymbol) != sigma.end()) {
+                    sigma.push_back(transitionSymbol);
+                }
+                srcToSymbolToDst.emplace(std::pair(state->name.toString(), transitionSymbol), sCase->state->toString());
+            }
+        }
+    }
+    return nullptr;
 }
 
 Converter::Converter(ParserOptions::EfsmBackendType efsmBackend) : classSettingsMap(new std::map<cstring, ClassSettings>()),
