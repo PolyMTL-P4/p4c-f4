@@ -106,24 +106,61 @@ IR::IndexedVector<IR::Declaration> *ExtendP4Class::addNameToDecls (IR::IndexedVe
     return result;
 }
 
+const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
+
+    json fbTotal;
+    std::vector<cstring> sigma;
+
+    for (const auto *state : efsm->states) {
+
+        cstring srcState = state->name.toString();
+        fbTotal["nodes"].push_back({{"x", 0},
+                                    {"y", 0},
+                                    {"text", srcState},
+                                    {"isAcceptState", false}});
+        if (state->selectExpression->is<IR::SelectExpression>()) {
+            for (const auto *const sCase : state->selectExpression->as<IR::SelectExpression>().selectCases) {
+                cstring transitionSymbol = sCase->keyset->toString();
+                cstring dstState = sCase->state->toString();
+                if (!sCase->keyset->is<IR::DefaultExpression>()) {
+                    if (std::find(sigma.begin(), sigma.end(), transitionSymbol) == sigma.end()) {
+                        sigma.push_back(transitionSymbol);
+                    }
+
+                    if (strcmp(srcState, dstState) != 0) {
+                        fbTotal["links"].push_back({{"type", "Link"},
+                                                    {"nodeA", srcState},
+                                                    {"nodeB", dstState},
+                                                    {"text", "freestyle"},
+                                                    {"lineAngleAdjust", 0},
+                                                    {"parallelPart", 0},
+                                                    {"perpendicularPart", 0}});
+                    } else {
+                        fbTotal["links"].push_back({{"type", "SelfLink"},
+                                                    {"nodeA", srcState},
+                                                    {"text", "freestyle"},
+                                                    {"anchorAngle", 0}});
+                    }
+                }
+            }
+        }
+    }
+
+    std::ofstream o("for-flowblaze.json");
+    o << std::setw(4) << fbTotal << std::endl;
+
+    return nullptr;
+}
+
 const IR::Node *EfsmToDfaSynthesis::preorder(IR::P4Efsm *efsm) {
 
     json dfaTotal;
-    //IR::IndexedVector<IR::EfsmState> statesNames;
-    //std::map<cstring, int> stateToID;
-    //std::map<std::pair<cstring, cstring>, cstring> srcToSymbolToDst;
     std::vector<cstring> sigma;
 
     dfaTotal["initial"] = "start";
 
-    //int i = 1;
     for (const auto *state : efsm->states) {
-        /*if (strcmp(state->name.toString(), "start") == 0) {
-            stateToID.emplace(state->name.toString(), 0);
-        } else {
-            stateToID.emplace(state->name.toString(), i);
-            i++;
-        }*/
+
         dfaTotal["states"].push_back(state->name.toString());
         if (state->selectExpression->is<IR::SelectExpression>()) {
             for (const auto *const sCase : state->selectExpression->as<IR::SelectExpression>().selectCases) {
@@ -133,7 +170,6 @@ const IR::Node *EfsmToDfaSynthesis::preorder(IR::P4Efsm *efsm) {
                         sigma.push_back(transitionSymbol);
                         dfaTotal["sigma"].push_back(transitionSymbol);
                     }
-                //srcToSymbolToDst.emplace(std::pair(state->name.toString(), transitionSymbol), sCase->state->toString());
                 dfaTotal["transitions"].push_back(std::vector<cstring> {state->name.toString(), transitionSymbol, sCase->state->toString()});
                 }
             }

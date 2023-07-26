@@ -107,7 +107,7 @@ class EfsmToFlowBlaze : public Transform {
  public:
     explicit EfsmToFlowBlaze() { setName("EfsmToFlowBlaze"); }
 
-    //const IR::Node *preorder(IR::P4Efsm *efsm) override;
+    const IR::Node *preorder(IR::P4Efsm *efsm) override;
 };
 
 class EfsmToDfaSynthesis : public Transform {
