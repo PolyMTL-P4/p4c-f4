@@ -15,9 +15,6 @@ limitations under the License.
 */
 
 #include "converters.h"
-#include <map>
-#include <vector>
-
 #include "frontends/common/constantFolding.h"
 #include "frontends/common/options.h"
 #include "frontends/common/parser_options.h"
@@ -28,6 +25,12 @@ limitations under the License.
 #include "ir/ir-generated.h"
 #include "lib/big_int_util.h"
 #include "lib/cstring.h"
+#include "nlohmann/json.hpp"
+#include <fstream>
+#include <map>
+#include <vector>
+
+using json = nlohmann::json;
 
 namespace F4 {
 
@@ -105,29 +108,43 @@ IR::IndexedVector<IR::Declaration> *ExtendP4Class::addNameToDecls (IR::IndexedVe
 
 const IR::Node *EfsmToDfaSynthesis::preorder(IR::P4Efsm *efsm) {
 
+    json dfaTotal;
     //IR::IndexedVector<IR::EfsmState> statesNames;
-    std::map<cstring, int> stateToID;
-    std::map<std::pair<cstring, cstring>, cstring> srcToSymbolToDst;
+    //std::map<cstring, int> stateToID;
+    //std::map<std::pair<cstring, cstring>, cstring> srcToSymbolToDst;
     std::vector<cstring> sigma;
 
-    int i = 1;
+    dfaTotal["initial"] = "start";
+
+    //int i = 1;
     for (const auto *state : efsm->states) {
-        if (strcmp(state->name.toString(), "start") == 0) {
+        /*if (strcmp(state->name.toString(), "start") == 0) {
             stateToID.emplace(state->name.toString(), 0);
         } else {
             stateToID.emplace(state->name.toString(), i);
             i++;
-        }
+        }*/
+        dfaTotal["states"].push_back(state->name.toString());
         if (state->selectExpression->is<IR::SelectExpression>()) {
             for (const auto *const sCase : state->selectExpression->as<IR::SelectExpression>().selectCases) {
                 cstring transitionSymbol = sCase->keyset->toString();
-                if (std::find(sigma.begin(), sigma.end(), transitionSymbol) != sigma.end()) {
-                    sigma.push_back(transitionSymbol);
+                if (!sCase->keyset->is<IR::DefaultExpression>()) {
+                    if (std::find(sigma.begin(), sigma.end(), transitionSymbol) == sigma.end()) {
+                        sigma.push_back(transitionSymbol);
+                        dfaTotal["sigma"].push_back(transitionSymbol);
+                    }
+                //srcToSymbolToDst.emplace(std::pair(state->name.toString(), transitionSymbol), sCase->state->toString());
+                dfaTotal["transitions"].push_back(std::vector<cstring> {state->name.toString(), transitionSymbol, sCase->state->toString()});
                 }
-                srcToSymbolToDst.emplace(std::pair(state->name.toString(), transitionSymbol), sCase->state->toString());
             }
         }
     }
+
+    dfaTotal["accepting"].push_back(dfaTotal["states"].at(dfaTotal["states"].size() - 1));
+
+    std::ofstream o("for-dfa-synthesis.json");
+    o << std::setw(4) << dfaTotal << std::endl;
+
     return nullptr;
 }
 

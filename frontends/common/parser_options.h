@@ -59,7 +59,7 @@ class ParserOptions : public Util::Options {
     // Which language to compile
     FrontendVersion langVersion = FrontendVersion::P4_16;
     // EFSM translation backend
-    EfsmBackendType efsmBackend = EfsmBackendType::FLOWBLAZE_P4;
+    EfsmBackendType efsmBackend = EfsmBackendType::DFA_SYNTHESIS;
     // options to pass to preprocessor
     cstring preprocessor_options = "";
     // file to compile (- for stdin)
