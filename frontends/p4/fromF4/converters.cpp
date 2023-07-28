@@ -110,7 +110,6 @@ IR::IndexedVector<IR::Declaration> *ExtendP4Class::addNameToDecls (IR::IndexedVe
 const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
 
     json fbTotal;
-    //std::vector<cstring> sigma;
 
     for (const auto *state : efsm->states) {
 
@@ -135,27 +134,30 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
                 cstring transitionSymbol = sCase->keyset->toString();
                 cstring dstState = sCase->state->toString();
                 if (!sCase->keyset->is<IR::DefaultExpression>()) {
-                    /*if (std::find(sigma.begin(), sigma.end(), transitionSymbol) == sigma.end()) {
-                        sigma.push_back(transitionSymbol);
-                    }*/
-                    cstring condition = selectExpr.select->components.at(0)->toString();
-                    if (!strcmp(transitionSymbol, "false")) {condition = "lautresens!";}
-                    //selectExpr.select->components.at(0)->dbprint(std::cout);
-
-
+                    // Only true/false select expression are authorized, for now
+                    auto *condition = selectExpr.select->components.at(0);
+                    if (!strcmp(transitionSymbol, "false")) {
+                        //condition = "the other way plz";
+                        condition->as<IR::Operation_Relation>();
+                        if (condition->is<IR::Lss>()) {
+                            auto truc = condition->as<IR::Lss>();
+                            condition = new IR::Geq(truc.left, truc.right);
+                        }
+                    }
+                    cstring condStr = condition->toString();
 
                     if (strcmp(srcState, dstState) != 0) {
                         fbTotal["links"].push_back({{"type", "Link"},
                                                     {"nodeA", srcState},
                                                     {"nodeB", dstState},
-                                                    {"text", "| " + condition + " | " + regUpdate + " | " + lesActions},
+                                                    {"text", "| " + condStr + " | " + regUpdate + " | " + lesActions},
                                                     {"lineAngleAdjust", 0},
                                                     {"parallelPart", 0},
                                                     {"perpendicularPart", 0}});
                     } else {
                         fbTotal["links"].push_back({{"type", "SelfLink"},
                                                     {"nodeA", srcState},
-                                                    {"text", "| " + condition + " | " + regUpdate + " | " + lesActions},
+                                                    {"text", "| " + condStr + " | " + regUpdate + " | " + lesActions},
                                                     {"anchorAngle", 0}});
                     }
                 }
