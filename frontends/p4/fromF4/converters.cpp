@@ -26,6 +26,7 @@ limitations under the License.
 #include "lib/big_int_util.h"
 #include "lib/cstring.h"
 #include "nlohmann/json.hpp"
+#include <cstring>
 #include <fstream>
 #include <map>
 #include <vector>
@@ -109,7 +110,7 @@ IR::IndexedVector<IR::Declaration> *ExtendP4Class::addNameToDecls (IR::IndexedVe
 const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
 
     json fbTotal;
-    std::vector<cstring> sigma;
+    //std::vector<cstring> sigma;
 
     for (const auto *state : efsm->states) {
 
@@ -118,30 +119,62 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
                                     {"y", 0},
                                     {"text", srcState},
                                     {"isAcceptState", false}});
+
+        cstring regUpdate = "";
+        cstring lesActions = "";
+        for (const auto *ligne : state->components) {
+            if (ligne->is<IR::MethodCallStatement>()) {
+                lesActions += ligne->toString() + "()";
+            } else {
+                regUpdate += ligne->toString();
+            }
+        }
         if (state->selectExpression->is<IR::SelectExpression>()) {
-            for (const auto *const sCase : state->selectExpression->as<IR::SelectExpression>().selectCases) {
+            auto selectExpr = state->selectExpression->as<IR::SelectExpression>();
+            for (const auto *sCase : selectExpr.selectCases) {
                 cstring transitionSymbol = sCase->keyset->toString();
                 cstring dstState = sCase->state->toString();
                 if (!sCase->keyset->is<IR::DefaultExpression>()) {
-                    if (std::find(sigma.begin(), sigma.end(), transitionSymbol) == sigma.end()) {
+                    /*if (std::find(sigma.begin(), sigma.end(), transitionSymbol) == sigma.end()) {
                         sigma.push_back(transitionSymbol);
-                    }
+                    }*/
+                    cstring condition = selectExpr.select->components.at(0)->toString();
+                    if (!strcmp(transitionSymbol, "false")) {condition = "lautresens!";}
+                    //selectExpr.select->components.at(0)->dbprint(std::cout);
+
+
 
                     if (strcmp(srcState, dstState) != 0) {
                         fbTotal["links"].push_back({{"type", "Link"},
                                                     {"nodeA", srcState},
                                                     {"nodeB", dstState},
-                                                    {"text", "freestyle"},
+                                                    {"text", "| " + condition + " | " + regUpdate + " | " + lesActions},
                                                     {"lineAngleAdjust", 0},
                                                     {"parallelPart", 0},
                                                     {"perpendicularPart", 0}});
                     } else {
                         fbTotal["links"].push_back({{"type", "SelfLink"},
                                                     {"nodeA", srcState},
-                                                    {"text", "freestyle"},
+                                                    {"text", "| " + condition + " | " + regUpdate + " | " + lesActions},
                                                     {"anchorAngle", 0}});
                     }
                 }
+            }
+        } else if (state->selectExpression->is<IR::PathExpression>()) {
+            cstring dstState = state->selectExpression->toString();
+            if (strcmp(srcState, dstState) != 0) {
+                fbTotal["links"].push_back({{"type", "Link"},
+                                            {"nodeA", srcState},
+                                            {"nodeB", dstState},
+                                            {"text", " | | " + regUpdate + " | " + lesActions},
+                                            {"lineAngleAdjust", 0},
+                                            {"parallelPart", 0},
+                                            {"perpendicularPart", 0}});
+            } else {
+                fbTotal["links"].push_back({{"type", "SelfLink"},
+                                            {"nodeA", srcState},
+                                            {"text", "| | " + regUpdate + " | " + lesActions},
+                                            {"anchorAngle", 0}});
             }
         }
     }
