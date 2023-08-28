@@ -25,6 +25,7 @@ limitations under the License.
 #include "ir/ir-generated.h"
 #include "lib/big_int_util.h"
 #include "lib/cstring.h"
+#include "lib/exceptions.h"
 #include "nlohmann/json.hpp"
 #include <cstring>
 #include <fstream>
@@ -110,10 +111,22 @@ IR::IndexedVector<IR::Declaration> *ExtendP4Class::addNameToDecls (IR::IndexedVe
 const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
 
     json fbTotal;
+    std::vector<cstring> stateStringToNum;
+
+    for (const auto *state : efsm->states) {
+        stateStringToNum.push_back(state->name.toString());
+    }
 
     for (const auto *state : efsm->states) {
 
         cstring srcState = state->name.toString();
+        int srcStateNum = 0;
+        auto it = std::find(stateStringToNum.begin(), stateStringToNum.end(), srcState);
+        if (it != stateStringToNum.end()) {
+            srcStateNum = it - stateStringToNum.begin();
+        } else {
+            BUG("Element not found\n");
+        }
         fbTotal["nodes"].push_back({{"x", 0},
                                     {"y", 0},
                                     {"text", srcState},
@@ -133,10 +146,17 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
             for (const auto *sCase : selectExpr.selectCases) {
                 cstring transitionSymbol = sCase->keyset->toString();
                 cstring dstState = sCase->state->toString();
+                int dstStateNum = 0;
+                auto it = std::find(stateStringToNum.begin(), stateStringToNum.end(), dstState);
+                if (it != stateStringToNum.end()) {
+                    dstStateNum = it - stateStringToNum.begin();
+                } else {
+                    BUG("Element not found\n");
+                }
                 if (!sCase->keyset->is<IR::DefaultExpression>()) {
                     // Only true/false select expression are authorized, for now
-                    auto *condition = selectExpr.select->components.at(0);
-                    if (!strcmp(transitionSymbol, "false")) {
+                    const auto *condition = selectExpr.select->components.at(0);
+                    if (strcmp(transitionSymbol, "false") == 0) {
                         //condition = "the other way plz";
                         condition->as<IR::Operation_Relation>();
                         if (condition->is<IR::Lss>()) {
@@ -148,15 +168,15 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
 
                     if (strcmp(srcState, dstState) != 0) {
                         fbTotal["links"].push_back({{"type", "Link"},
-                                                    {"nodeA", srcState},
-                                                    {"nodeB", dstState},
+                                                    {"nodeA", srcStateNum},
+                                                    {"nodeB", dstStateNum},
                                                     {"text", "| " + condStr + " | " + regUpdate + " | " + lesActions},
                                                     {"lineAngleAdjust", 0},
                                                     {"parallelPart", 0},
                                                     {"perpendicularPart", 0}});
                     } else {
                         fbTotal["links"].push_back({{"type", "SelfLink"},
-                                                    {"nodeA", srcState},
+                                                    {"nodeA", srcStateNum},
                                                     {"text", "| " + condStr + " | " + regUpdate + " | " + lesActions},
                                                     {"anchorAngle", 0}});
                     }
@@ -164,17 +184,24 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
             }
         } else if (state->selectExpression->is<IR::PathExpression>()) {
             cstring dstState = state->selectExpression->toString();
+            int dstStateNum = 0;
+            auto it = std::find(stateStringToNum.begin(), stateStringToNum.end(), dstState);
+            if (it != stateStringToNum.end()) {
+                dstStateNum = it - stateStringToNum.begin();
+            } else {
+                BUG("Element not found\n");
+            }
             if (strcmp(srcState, dstState) != 0) {
                 fbTotal["links"].push_back({{"type", "Link"},
-                                            {"nodeA", srcState},
-                                            {"nodeB", dstState},
+                                            {"nodeA", srcStateNum},
+                                            {"nodeB", dstStateNum},
                                             {"text", " | | " + regUpdate + " | " + lesActions},
                                             {"lineAngleAdjust", 0},
                                             {"parallelPart", 0},
                                             {"perpendicularPart", 0}});
             } else {
                 fbTotal["links"].push_back({{"type", "SelfLink"},
-                                            {"nodeA", srcState},
+                                            {"nodeA", srcStateNum},
                                             {"text", "| | " + regUpdate + " | " + lesActions},
                                             {"anchorAngle", 0}});
             }
