@@ -176,7 +176,7 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
                                                     {"perpendicularPart", 0}});
                     } else {
                         fbTotal["links"].push_back({{"type", "SelfLink"},
-                                                    {"nodeA", srcStateNum},
+                                                    {"node", srcStateNum},
                                                     {"text", "| " + condStr + " | " + regUpdate + " | " + lesActions},
                                                     {"anchorAngle", 0}});
                     }
@@ -201,7 +201,7 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
                                             {"perpendicularPart", 0}});
             } else {
                 fbTotal["links"].push_back({{"type", "SelfLink"},
-                                            {"nodeA", srcStateNum},
+                                            {"node", srcStateNum},
                                             {"text", "| | " + regUpdate + " | " + lesActions},
                                             {"anchorAngle", 0}});
             }
