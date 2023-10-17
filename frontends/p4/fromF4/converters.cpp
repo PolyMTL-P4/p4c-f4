@@ -138,7 +138,7 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
             if (ligne->is<IR::MethodCallStatement>()) {
                 lesActions += ligne->toString() + "()";
             } else {
-                regUpdate += ligne->toString();
+                regUpdate += ligne->toString() + "; ";
             }
         }
         if (state->selectExpression->is<IR::SelectExpression>()) {
@@ -146,6 +146,7 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
             for (const auto *sCase : selectExpr.selectCases) {
                 cstring transitionSymbol = sCase->keyset->toString();
                 cstring dstState = sCase->state->toString();
+                //std::cout << transitionSymbol << "  " << dstState << std::endl;
                 int dstStateNum = 0;
                 auto it = std::find(stateStringToNum.begin(), stateStringToNum.end(), dstState);
                 if (it != stateStringToNum.end()) {
@@ -153,31 +154,59 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
                 } else {
                     BUG("Element not found\n");
                 }
+                cstring condStr = "";
+                cstring matchStr = "";
                 if (!sCase->keyset->is<IR::DefaultExpression>()) {
                     // Only true/false select expression are authorized, for now
-                    const auto *condition = selectExpr.select->components.at(0);
-                    if (strcmp(transitionSymbol, "false") == 0) {
-                        //condition = "the other way plz";
-                        condition->as<IR::Operation_Relation>();
-                        if (condition->is<IR::Lss>()) {
-                            auto truc = condition->as<IR::Lss>();
-                            condition = new IR::Geq(truc.left, truc.right);
+                    const auto *firstSelectExpr = selectExpr.select->components.at(0);
+                    if (firstSelectExpr->is<IR::Operation_Relation>()) {
+                        const auto *condition = firstSelectExpr;
+
+                        if (strcmp(transitionSymbol, "false") == 0) {
+                            //condition = "the other way plz";
+                            if (condition->is<IR::Lss>()) {
+                                auto truc = condition->as<IR::Lss>();
+                                condition = new IR::Geq(truc.left, truc.right);
+                            }
                         }
+                        condStr = condition->toString();
+                    } else {
+                        cstring matchVar = firstSelectExpr->toString();
+                        cstring matchValue = transitionSymbol;
+                        cstring mask = "";
+                        for (size_t i = 0; i < strlen(matchValue); i++) {
+                            mask += "F";
+                        }
+                        matchStr = matchVar + " == " + matchValue + "&&&" + mask;
                     }
-                    cstring condStr = condition->toString();
 
                     if (strcmp(srcState, dstState) != 0) {
                         fbTotal["links"].push_back({{"type", "Link"},
                                                     {"nodeA", srcStateNum},
                                                     {"nodeB", dstStateNum},
-                                                    {"text", "| " + condStr + " | " + regUpdate + " | " + lesActions},
+                                                    {"text", matchStr + " | " + condStr + " | " + regUpdate + " | " + lesActions},
                                                     {"lineAngleAdjust", 0},
                                                     {"parallelPart", 0},
                                                     {"perpendicularPart", 0}});
                     } else {
                         fbTotal["links"].push_back({{"type", "SelfLink"},
                                                     {"node", srcStateNum},
-                                                    {"text", "| " + condStr + " | " + regUpdate + " | " + lesActions},
+                                                    {"text", matchStr + " | " + condStr + " | " + regUpdate + " | " + lesActions},
+                                                    {"anchorAngle", 0}});
+                    }
+                } else {
+                    if (strcmp(srcState, dstState) != 0) {
+                        fbTotal["links"].push_back({{"type", "Link"},
+                                                    {"nodeA", srcStateNum},
+                                                    {"nodeB", dstStateNum},
+                                                    {"text", matchStr + " | " + condStr + " | " + regUpdate + " | " + lesActions},
+                                                    {"lineAngleAdjust", 0},
+                                                    {"parallelPart", 0},
+                                                    {"perpendicularPart", 0}});
+                    } else {
+                        fbTotal["links"].push_back({{"type", "SelfLink"},
+                                                    {"node", srcStateNum},
+                                                    {"text", matchStr + " | " + condStr + " | " + regUpdate + " | " + lesActions},
                                                     {"anchorAngle", 0}});
                     }
                 }
