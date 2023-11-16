@@ -42,6 +42,15 @@ limitations under the License.
 #include "lib/cstring.h"
 #include "lib/exceptions.h"*/
 
+enum {
+    MAX_REG_ACTIONS_PER_TRANSITION = 3,
+    MAX_CONDITIONS = 4,
+    FDV_BASE_REGISTER = 0x00,
+    GDV_BASE_REGISTER = 0x0F,
+    REVERSE_CONDITION_XOR = 0b111,
+    SWAP_CONDITION_XOR = 0b110
+};
+
 struct RegActPar {
     cstring operation;
     std::string result;
@@ -59,18 +68,13 @@ struct CondPar {
     std::string operand2;
     std::string matchVariable;
     bool operator==(const CondPar &laCond) const {
-        return (cond == laCond.cond) && (op1 == laCond.op1) && (op2 == laCond.op2) &&
-               (operand1 == laCond.operand1) && (operand2 == laCond.operand2) &&
-               (matchVariable == laCond.matchVariable);
+        return ((cond == laCond.cond) && (op1 == laCond.op1) && (op2 == laCond.op2) &&
+                (operand1 == laCond.operand1) && (operand2 == laCond.operand2) &&
+                (matchVariable == laCond.matchVariable)) ||
+               (((cond ^ SWAP_CONDITION_XOR) == laCond.cond) && (op2 == laCond.op1) && (op1 == laCond.op2) &&
+                (operand2 == laCond.operand1) && (operand1 == laCond.operand2) &&
+                (matchVariable == laCond.matchVariable));
     }
-};
-
-enum {
-    MAX_REG_ACTIONS_PER_TRANSITION = 3,
-    MAX_CONDITIONS = 4,
-    FDV_BASE_REGISTER = 0x00,
-    GDV_BASE_REGISTER = 0x0F,
-    REVERSE_CONDITION_XOR = 0b111
 };
 
 namespace F4 {
