@@ -36,30 +36,33 @@ limitations under the License.
 
 namespace F4 {
 
-struct ClassSettings{
+struct ClassSettings {
     IR::IndexedVector<IR::Declaration> decls;
-    IR::ParameterList                  params;
+    IR::ParameterList params;
 };
 
 class ReplaceMembers : public Transform {
     std::map<cstring, cstring> *instanceToClassNameMap;
 
  public:
-    explicit ReplaceMembers(std::map<cstring, cstring> *instanceToClassNameMap) : instanceToClassNameMap(instanceToClassNameMap) {
+    explicit ReplaceMembers(std::map<cstring, cstring> *instanceToClassNameMap)
+        : instanceToClassNameMap(instanceToClassNameMap) {
         setName("ReplaceMembers");
     }
 
     const IR::Node *preorder(IR::Member *IRmember) override;
 };
 
-
 class ReplaceParameters : public Transform {
     std::map<cstring, IR::Argument> *paramArgMap;
     std::map<cstring, cstring> *substituteVars;
 
  public:
-    explicit ReplaceParameters(std::map<cstring, IR::Argument> *paramArgMap, std::map<cstring, cstring> *substituteVars) : paramArgMap(paramArgMap), substituteVars(substituteVars)
-    { setName("ReplaceParameters"); }
+    explicit ReplaceParameters(std::map<cstring, IR::Argument> *paramArgMap,
+                               std::map<cstring, cstring> *substituteVars)
+        : paramArgMap(paramArgMap), substituteVars(substituteVars) {
+        setName("ReplaceParameters");
+    }
 
     const IR::Node *postorder(IR::Expression *expr) override;
 };
@@ -69,8 +72,9 @@ class RegisterClass : public Transform {
 
  public:
     explicit RegisterClass(std::map<cstring, ClassSettings> *classSettingsMap)
-        : classSettingsMap(classSettingsMap)
-        { setName("RegisterClass"); }
+        : classSettingsMap(classSettingsMap) {
+        setName("RegisterClass");
+    }
 
     const IR::Node *preorder(IR::P4Class *laClass) override;
 };
@@ -80,15 +84,16 @@ class ExtendP4Class : public Transform {
     std::map<cstring, cstring> *instanceToClassNameMap;
 
  protected:
-    static IR::IndexedVector<IR::Declaration> *addNameToDecls (IR::IndexedVector<IR::Declaration> *ref,
-                                                cstring className, cstring instanceName,
-                                                std::map<cstring, cstring> *substituteVars);
+    static IR::IndexedVector<IR::Declaration> *addNameToDecls(
+        IR::IndexedVector<IR::Declaration> *ref, cstring className, cstring instanceName,
+        std::map<cstring, cstring> *substituteVars);
 
  public:
     explicit ExtendP4Class(std::map<cstring, ClassSettings> *classSettingsMap,
                            std::map<cstring, cstring> *instanceToClassNameMap)
-        : classSettingsMap(classSettingsMap), instanceToClassNameMap(instanceToClassNameMap)
-        { setName("ExtendP4Class"); }
+        : classSettingsMap(classSettingsMap), instanceToClassNameMap(instanceToClassNameMap) {
+        setName("ExtendP4Class");
+    }
 
     const IR::Node *preorder(IR::Declaration_Instance *object) override;
 
@@ -108,6 +113,7 @@ class EfsmToFlowBlaze : public Transform {
     explicit EfsmToFlowBlaze() { setName("EfsmToFlowBlaze"); }
 
     const IR::Node *preorder(IR::P4Efsm *efsm) override;
+    /*const IR::Node *preorder(IR::MethodCallExpression *call) override;*/
 };
 
 class EfsmToDfaSynthesis : public Transform {
@@ -126,12 +132,12 @@ class Converter : public PassManager {
     explicit Converter(ParserOptions::EfsmBackendType efsmBackend);
     void loadModel() {}
     Visitor::profile_t init_apply(const IR::Node *node) override;
-    
+
  private:
     std::map<cstring, ClassSettings> *classSettingsMap;
     std::map<cstring, cstring> *instanceToClassNameMap;
 };
 
-} // namespace F4
+}  // namespace F4
 
 #endif /* _FRONTENDS_P4_FROMO4_CONVERTERS_H_ */

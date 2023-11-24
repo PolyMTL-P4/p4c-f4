@@ -71,9 +71,9 @@ struct CondPar {
         return ((cond == laCond.cond) && (op1 == laCond.op1) && (op2 == laCond.op2) &&
                 (operand1 == laCond.operand1) && (operand2 == laCond.operand2) &&
                 (matchVariable == laCond.matchVariable)) ||
-               (((cond ^ SWAP_CONDITION_XOR) == laCond.cond) && (op2 == laCond.op1) && (op1 == laCond.op2) &&
-                (operand2 == laCond.operand1) && (operand1 == laCond.operand2) &&
-                (matchVariable == laCond.matchVariable));
+               (((cond ^ SWAP_CONDITION_XOR) == laCond.cond) && (op2 == laCond.op1) &&
+                (op1 == laCond.op2) && (operand2 == laCond.operand1) &&
+                (operand1 == laCond.operand2) && (matchVariable == laCond.matchVariable));
     }
 };
 
@@ -411,7 +411,7 @@ cstring formatEfsmTableCommand(int &srcStateNum, int &dstStateNum,
     cstring efsmTableCommand = "table_add FlowBlaze.EFSM_table define_operation_update_state ";
     cstring conditionList = "";
     for (int i = 0; i < 4; i++) {
-        conditionList += currentConditions.at(i) ? "1&&&F " : "0&&&0 ";
+        conditionList += currentConditions.at(i) ? "1&&&1 " : "0&&&0 ";
     }
     efsmTableCommand += std::to_string(srcStateNum) + "&&&0xFFFF " + conditionList + otherMatch +
                         " => " + std::to_string(dstStateNum) + " " + actionsForEfsm +
@@ -530,6 +530,20 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
     return nullptr;
 }
 
+/*const IR::Node *EfsmToFlowBlaze::preorder(IR::MethodCallExpression *call) {
+    if (call->method->is<IR::Member>()) {
+        auto *membre = call->method->as<IR::Member>().clone();
+        if (strcmp(membre->member.toString(), "apply") == 0) {
+            if (strcmp(membre->expr->toString(), "MyEFSM") == 0) {
+                membre->expr = new IR::PathExpression(IR::ID("FlowBlaze"));
+            }
+        }
+        auto *newCall = new IR::MethodCallExpression(new IR::Member(*membre));
+        return newCall;
+    }
+    return call;
+}
+*/
 const IR::Node *EfsmToDfaSynthesis::preorder(IR::P4Efsm * /*efsm*/) {
     /*json dfaTotal;
     std::vector<cstring> sigma;
