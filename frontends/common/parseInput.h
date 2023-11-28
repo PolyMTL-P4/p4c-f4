@@ -96,7 +96,7 @@ const IR::P4Program *parseP4File(ParserOptions &options) {
 
         std::string file(options.file);
         std::filesystem::path filepath(file);
-        options.file = filepath.stem().string() + "-IR.p4";
+        options.file = (filepath.has_parent_path() ? filepath.parent_path().string() + "/" : "") + filepath.stem().string() + "-IR.p4";
         Util::PathName path(options.file);
         std::ostream *ppStream = openFile(path.toString(), true);
         P4::ToP4 top4(ppStream, false, options.file);
