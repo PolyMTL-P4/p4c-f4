@@ -17,6 +17,9 @@ limitations under the License.
 #ifndef _FRONTENDS_COMMON_PARSEINPUT_H_
 #define _FRONTENDS_COMMON_PARSEINPUT_H_
 
+#include <filesystem>
+#include <string>
+
 #include "frontends/common/options.h"
 #include "frontends/p4/fromF4/converters.h"
 #include "frontends/p4/fromv1.0/converters.h"
@@ -91,7 +94,9 @@ const IR::P4Program *parseP4File(ParserOptions &options) {
         F4::Converter converter(options.efsmBackend);
         result = result->apply(converter);
 
-        options.file = options.file + "-IR.p4";
+        std::string file(options.file);
+        std::filesystem::path filepath(file);
+        options.file = filepath.stem().string() + "-IR.p4";
         Util::PathName path(options.file);
         std::ostream *ppStream = openFile(path.toString(), true);
         P4::ToP4 top4(ppStream, false, options.file);
@@ -112,7 +117,7 @@ const IR::P4Program *parseP4File(ParserOptions &options) {
         const auto *result2 = P4::P4ParserDriver::parse(in2, options.file);
 
         options.closeInput(in2);
-        
+
         if (::errorCount() > 0) {
             ::error(ErrorType::ERR_OVERLIMIT, "%1% errors encountered, aborting compilation",
                     ::errorCount());
@@ -121,7 +126,7 @@ const IR::P4Program *parseP4File(ParserOptions &options) {
         BUG_CHECK(result2 != nullptr, "Parsing failed, but we didn't report an error");
         return result2;
     }
-    
+
     return result;
 }
 
