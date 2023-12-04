@@ -19,6 +19,7 @@ limitations under the License.
 #include <array>
 #include <fstream>
 
+#include "nlohmann/json.hpp"
 /*#include <algorithm>
 #include <bitset>
 #include <cstddef>
@@ -41,6 +42,8 @@ limitations under the License.
 #include "lib/big_int_util.h"
 #include "lib/cstring.h"
 #include "lib/exceptions.h"*/
+
+using json = nlohmann::json;
 
 enum {
     MAX_REG_ACTIONS_PER_TRANSITION = 3,
@@ -544,8 +547,8 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
     return call;
 }
 */
-const IR::Node *EfsmToDfaSynthesis::preorder(IR::P4Efsm * /*efsm*/) {
-    /*json dfaTotal;
+const IR::Node *EfsmToDfaSynthesis::preorder(IR::P4Efsm * efsm) {
+    json dfaTotal;
     std::vector<cstring> sigma;
 
     dfaTotal["initial"] = "start";
@@ -571,7 +574,7 @@ const IR::Node *EfsmToDfaSynthesis::preorder(IR::P4Efsm * /*efsm*/) {
 
     std::ofstream o("for-dfa-synthesis.json");
     o << std::setw(4) << dfaTotal << std::endl;
-    o.close();*/
+    o.close();
 
     return nullptr;
 }
