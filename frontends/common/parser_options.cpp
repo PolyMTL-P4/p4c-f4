@@ -172,20 +172,6 @@ ParserOptions::ParserOptions() : Util::Options(defaultMessage) {
         },
         "Specify language version to compile.");
     registerOption(
-        "--efsm", "{dfa|fb}",
-        [this](const char *arg) {
-            if (!strcmp(arg, "fb")) {
-                efsmBackend = ParserOptions::EfsmBackendType::FLOWBLAZE_P4;
-            } else if (!strcmp(arg, "dfa")) {
-                efsmBackend = ParserOptions::EfsmBackendType::DFA_SYNTHESIS;
-            } else {
-                ::error(ErrorType::ERR_INVALID, "Illegal backend type %1%", arg);
-                return false;
-            }
-            return true;
-        },
-        "Specify backend used to translate EFSM.");
-    registerOption(
         "--nocpp", nullptr,
         [this](const char *) {
             doNotPreprocess = true;

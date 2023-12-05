@@ -23,6 +23,7 @@ limitations under the License.
 #include "dbprint.h"
 #include "ir/id.h"
 #include "ir/indexed_vector.h"
+#include "ir/ir-generated.h"
 #include "ir/ir.h"
 #include "ir/namemap.h"
 #include "ir/node.h"
@@ -175,7 +176,21 @@ void IR::EfsmState::dbprint(std::ostream &out) const {
     out << " }" << unindent;
 }
 void IR::P4Efsm::dbprint(std::ostream &out) const {
-    out << "p4class " << name << "(";
+    out << "efsm " << name << "(";
+    const char *sep = "";
+    for (auto arg : constructorParams->parameters) {
+        out << sep << arg->direction << ' ' << arg->type << ' ' << arg->name;
+        sep = ", ";
+    }
+    out << ") {" << indent;
+    for (auto d : efsmLocals) out << Log::endl << d;
+    /*if (controlLocals)
+        for (auto p : controlLocals->components) out << Log::endl << p;*/
+    out << unindent << " }";
+}
+
+void IR::P4Dfa::dbprint(std::ostream &out) const {
+    out << "dfa " << name << "(";
     const char *sep = "";
     for (auto arg : constructorParams->parameters) {
         out << sep << arg->direction << ' ' << arg->type << ' ' << arg->name;

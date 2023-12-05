@@ -221,7 +221,7 @@ inline std::ostream& operator<<(std::ostream& out, const P4::Token& t) {
 %token<Token>      DOTS "..."
 %token<Token>      RANGE ".."
 %token<Token>      TRUE FALSE THIS
-%token<Token>      ABSTRACT ACTION ACTIONS APPLY BOOL BIT CONST CONTROL DEFAULT EFSM
+%token<Token>      ABSTRACT ACTION ACTIONS APPLY BOOL BIT CONST CONTROL DEFAULT DFA EFSM
                    ELSE ENTRIES ENUM ERROR EXIT EXTERN HEADER HEADER_UNION IF IN INOUT
                    INT KEY  LIST SELECT MATCH_KIND TYPE OUT P4CLASS PACKAGE PARSER PRAGMA RETURN STATE
                    STRING STRUCT SWITCH TABLE TRANSITION TUPLE TYPEDEF VARBIT VALUESET VOID
@@ -559,6 +559,7 @@ annotationToken
     | CONST            { $$ = $1; }
     | CONTROL          { $$ = $1; }
     | DEFAULT          { $$ = $1; }
+    | DFA              { $$ = $1; }
     | EFSM             { $$ = $1; }
     | ELSE             { $$ = $1; }
     | ENTRIES          { $$ = $1; }
@@ -746,6 +747,13 @@ efsmDeclaration
                               //driver.structure->declareParameters($5);
                               auto pl = new IR::ParameterList(@5, *$5);
                               $$ = new IR::P4Efsm(@3, *$3, pl, *$9, *$10);}
+    | optAnnotations DFA name "(" parameterList ")" optConstructorParameters
+      "{" parserLocalElements efsmStates "}"
+                            { //driver.structure->pushContainerType(*$3, true);
+                              //driver.structure->declareParameters($5);
+                              auto pl = new IR::ParameterList(@5, *$5);
+                              $$ = new IR::P4Dfa(@3, *$3, pl, *$9, *$10);}
+    ;
 
 efsmStates
     : efsmState                     { $$ = new IR::IndexedVector<IR::EfsmState>();

@@ -121,6 +121,8 @@ using Parser = P4::P4Parser;
                   return makeToken(CONTROL); }
 "default"       { BEGIN(driver.saveState); driver.template_args = false;
                   return makeToken(DEFAULT); }
+"dfa"           { BEGIN(driver.saveState); driver.template_args = false;
+                  return makeToken(DFA); }
 "efsm"          { BEGIN(driver.saveState); driver.template_args = false;
                   return makeToken(EFSM); }
 "else"          { BEGIN(driver.saveState); driver.template_args = false;
