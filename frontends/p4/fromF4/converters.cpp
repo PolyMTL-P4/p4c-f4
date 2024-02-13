@@ -16,6 +16,8 @@ limitations under the License.
 
 #include "converters.h"
 
+#include <z3++.h>
+
 #include <array>
 #include <fstream>
 
@@ -27,8 +29,11 @@ limitations under the License.
 #include <iomanip>
 #include <iterator>
 #include <map>
+#include <ostream>
 #include <sstream>
 #include <string>
+#include <tuple>
+#include <unordered_map>
 #include <vector>
 
 #include "frontends/common/constantFolding.h"
@@ -547,35 +552,66 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
     return call;
 }
 */
+
+
+bool isSplit(const cstring& dst, std::unordered_map<cstring, std::vector<cstring>> inSymbols, std::unordered_map<cstring, std::vector<cstring>> outEdges) {
+    return (outEdges.at(dst).size() <= 2) && (inSymbols.at(dst).size() > 1);
+}
+
 const IR::Node *EfsmToDfaSynthesis::preorder(IR::P4Dfa *dfa) {
-    json dfaTotal;
+    const int numSplitNodes = 2;
     std::vector<cstring> sigma;
 
-    dfaTotal["initial"] = "start";
+    //dfaTotal["initial"] = "start";
+
+    std::vector<cstring> dfaStates;
+    std::vector<cstring> dfaSigma;
+    std::vector<std::tuple<cstring, cstring, cstring>> dfaTransitions;
+
+    std::unordered_map<cstring, std::vector<cstring>> inSymbols;
+    std::unordered_map<cstring, std::vector<cstring>> outEdges;
+    std::unordered_map<cstring, cstring> expandedStates;
+    std::unordered_map<cstring, std::vector<std::tuple<cstring, int>>> splitNodes;
 
     for (const auto *state : dfa->states) {
-        dfaTotal["states"].push_back(state->name.toString());
+        dfaStates.push_back(state->name.toString());
         if (state->selectExpression->is<IR::SelectExpression>()) {
             for (const auto *const sCase :
                  state->selectExpression->as<IR::SelectExpression>().selectCases) {
                 cstring transitionSymbol = sCase->keyset->toString();
                 if (!sCase->keyset->is<IR::DefaultExpression>()) {
-                    if (std::find(sigma.begin(), sigma.end(), transitionSymbol) == sigma.end())
-    { sigma.push_back(transitionSymbol); dfaTotal["sigma"].push_back(transitionSymbol);
+                    if (std::find(sigma.begin(), sigma.end(), transitionSymbol) == sigma.end()) {
+                        sigma.push_back(transitionSymbol);
+                        dfaSigma.push_back(transitionSymbol);
                     }
-                    dfaTotal["transitions"].push_back(std::vector<cstring>{
-                        state->name.toString(), transitionSymbol, sCase->state->toString()});
+                    cstring src = state->name.toString();
+                    cstring dst = sCase->state->toString();
+                    dfaTransitions.emplace_back(state->name.toString(), transitionSymbol, sCase->state->toString());
+                    inSymbols.emplace(dst, transitionSymbol);
+                    outEdges.emplace(src, dst);
+                    
                 }
             }
         }
     }
 
-    dfaTotal["accepting"].push_back(dfaTotal["states"].at(dfaTotal["states"].size() - 1));
 
-    std::ofstream o("for-dfa-synthesis.json");
-    o << std::setw(4) << dfaTotal << std::endl;
-    o.close();
+    for (const auto& dst : dfaStates) {
+        if (isSplit(dst, inSymbols, outEdges)) {
+            std::cout << "state is split into several nodes" << std::endl;
+            splitNodes.emplace(dst, std::vector{std::tuple<cstring, int>{dst, 0}});
+        }
+    }
 
+
+
+    //dfaTotal["accepting"].push_back(dfaTotal["states"].at(dfaTotal["states"].size() - 1));
+
+    //std::ofstream o("for-dfa-synthesis.json");
+    //o << std::setw(4) << dfaTotal << std::endl;
+    //o.close();
+
+    
     return nullptr;
 }
 
