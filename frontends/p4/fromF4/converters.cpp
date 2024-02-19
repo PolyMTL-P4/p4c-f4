@@ -382,32 +382,44 @@ cstring formatPktActionEntries(
     return pktActionsTableEntries;
 }
 
-cstring formatEfsmTableCommand(int &srcStateNum, int &dstStateNum,
-                               std::array<bool, 4> &currentConditions, int &currentPktAction,
-                               cstring &actionsForEfsm, cstring &otherMatch) {
+cstring formatActionTableCommand(int &srcStateNum, int &currentPktAction, cstring &actionsForEfsm) {
     cstring efsmTableCommand = "table_add FlowBlaze.EFSM_table define_operation_update_state ";
+    efsmTableCommand += std::to_string(srcStateNum) + "&&&0xFFFF " + " => " + actionsForEfsm +
+                        std::to_string(currentPktAction) + " 1"  // priority
+                        + "\n";
+    return (efsmTableCommand);
+}
+
+cstring formatTransitionCommand(int &srcStateNum, int &dstStateNum,
+                                std::array<bool, 4> &currentConditions, cstring &otherMatch) {
     cstring transitionTableCommand = "table_add FlowBlaze.transition_table define_transition ";
     cstring conditionList = "";
     for (int i = 0; i < 4; i++) {
         conditionList += currentConditions.at(i) ? "1&&&1 " : "0&&&0 ";
     }
-    efsmTableCommand += std::to_string(srcStateNum) + "&&&0xFFFF " +
-                        " => " + actionsForEfsm +
-                        std::to_string(currentPktAction) + " 1"  // priority
-                        + "\n";
-    transitionTableCommand += std::to_string(srcStateNum) + "&&&0xFFFF " + conditionList + otherMatch +
-                              " => " + std::to_string(dstStateNum) + " 1" // priority
+    transitionTableCommand += std::to_string(srcStateNum) + "&&&0xFFFF " + conditionList +
+                              otherMatch + " => " + std::to_string(dstStateNum) + " 1"  // priority
                               + "\n";
-    return (efsmTableCommand + transitionTableCommand);
+    return (transitionTableCommand);
 }
 
-void parseTransition(
-    const IR::Expression *selectExpression, const std::map<cstring, uint> &conditions,
-    std::vector<CondPar> &conditionsParsedVec, std::vector<cstring> &globalDataVariables,
-    std::vector<cstring> &flowDataVariables, std::vector<RegActPar> &regActionsParsedVec,
-    std::vector<cstring> stateStringToNum, const std::map<cstring, int> &operations,
-    const std::map<cstring, int> &registers, std::vector<std::string> &otherMatches,
-    cstring &efsmTableCommands, int &currentPktAction, int &srcStateNum) {
+void parseStateAction(std::vector<RegActPar> &regActionsParsedVec,
+                      const std::map<cstring, int> &operations, cstring &actionTableCommands,
+                      int &currentPktAction, int &srcStateNum) {
+    cstring actionsForEfsm = formatActionParsed(regActionsParsedVec, operations);
+    cstring actionTableCommand =
+        formatActionTableCommand(srcStateNum, currentPktAction, actionsForEfsm);
+    actionTableCommands += actionTableCommand;
+}
+
+void parseTransition(const IR::Expression *selectExpression,
+                     const std::map<cstring, uint> &conditions,
+                     std::vector<CondPar> &conditionsParsedVec,
+                     std::vector<cstring> &globalDataVariables,
+                     std::vector<cstring> &flowDataVariables, std::vector<cstring> stateStringToNum,
+                     const std::map<cstring, int> &registers,
+                     std::vector<std::string> &otherMatches, cstring &transitionCommands,
+                     int &srcStateNum) {
     if (selectExpression->is<IR::SelectExpression>()) {
         auto selectExpr = selectExpression->as<IR::SelectExpression>();
         std::vector<CondPar> selectArgs;
@@ -433,11 +445,9 @@ void parseTransition(
             }
             cstring dstState = sCase->state->toString();
             int dstStateNum = findPositionInVector(stateStringToNum, dstState);
-            cstring actionsForEfsm = formatActionParsed(regActionsParsedVec, operations);
-            cstring efsmTableCommand =
-                formatEfsmTableCommand(srcStateNum, dstStateNum, currentConditions,
-                                       currentPktAction, actionsForEfsm, matchStr);
-            efsmTableCommands += efsmTableCommand;
+            cstring transitionCommand =
+                formatTransitionCommand(srcStateNum, dstStateNum, currentConditions, matchStr);
+            transitionCommands += transitionCommand;
         }
     } else if (selectExpression->is<IR::PathExpression>()) {
         std::array<bool, 4 /*MAX_CONDITIONS*/> currentConditions = {false, false, false, false};
@@ -450,11 +460,9 @@ void parseTransition(
         }
         cstring dstState = selectExpression->toString();
         int dstStateNum = findPositionInVector(stateStringToNum, dstState);
-        cstring actionsForEfsm = formatActionParsed(regActionsParsedVec, operations);
-        cstring efsmTableCommand =
-            formatEfsmTableCommand(srcStateNum, dstStateNum, currentConditions, currentPktAction,
-                                   actionsForEfsm, matchStr);
-        efsmTableCommands += efsmTableCommand;
+        cstring transitionCommand =
+            formatTransitionCommand(srcStateNum, dstStateNum, currentConditions, matchStr);
+        transitionCommands += transitionCommand;
     }
 }
 
@@ -478,7 +486,8 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
         stateStringToNum.push_back(state->name.toString());
     }
 
-    cstring efsmTableCommands = "";
+    cstring actionTableCommands = "";
+    cstring transitionCommands = "";
 
     for (const auto *state : efsm->states) {
         std::vector<RegActPar> regActionsParsedVec;
@@ -492,10 +501,12 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
                         flowDataVariables, operations, registers, currentPktAction);
         }
 
+        parseStateAction(regActionsParsedVec, operations, actionTableCommands, currentPktAction,
+                         srcStateNum);
+
         parseTransition(state->selectExpression, conditions, conditionsParsedVec,
-                        globalDataVariables, flowDataVariables, regActionsParsedVec,
-                        stateStringToNum, operations, registers, otherMatches, efsmTableCommands,
-                        currentPktAction, srcStateNum);
+                        globalDataVariables, flowDataVariables, stateStringToNum, registers,
+                        otherMatches, transitionCommands, srcStateNum);
     }
 
     cstring conditionEntry = formatConditionParsed(conditionsParsedVec, conditions);
@@ -505,7 +516,8 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
     std::ofstream o("flowblaze-table-commands.txt");
     o << conditionEntry << std::endl
       << pktActionsTableEntries << std::endl
-      << efsmTableCommands << std::endl;
+      << actionTableCommands << std::endl
+      << transitionCommands << std::endl;
     o.close();
 
     return nullptr;
