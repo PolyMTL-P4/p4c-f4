@@ -129,7 +129,7 @@ class EfsmToDfaSynthesis : public Transform {
 // Is fed a F4 program and outputs an equivalent P4-16 program
 class Converter : public PassManager {
  public:
-    explicit Converter(ParserOptions::EfsmBackendType efsmBackend);
+    explicit Converter();
     void loadModel() {}
     Visitor::profile_t init_apply(const IR::Node *node) override;
 

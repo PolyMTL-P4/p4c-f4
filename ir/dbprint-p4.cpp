@@ -175,7 +175,7 @@ void IR::EfsmState::dbprint(std::ostream &out) const {
     out << " }" << unindent;
 }
 void IR::P4Efsm::dbprint(std::ostream &out) const {
-    out << "p4class " << name << "(";
+    out << "efsm " << name << "(";
     const char *sep = "";
     for (auto arg : constructorParams->parameters) {
         out << sep << arg->direction << ' ' << arg->type << ' ' << arg->name;
