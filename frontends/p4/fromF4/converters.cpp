@@ -17,7 +17,11 @@ limitations under the License.
 #include "converters.h"
 
 #include <array>
+#include <cstddef>
 #include <fstream>
+#include <regex>
+#include <sstream>
+#include <string>
 
 enum {
     MAX_REG_ACTIONS_PER_TRANSITION = 3,
@@ -403,6 +407,31 @@ cstring formatTransitionCommand(int &srcStateNum, int &dstStateNum,
     return (transitionTableCommand);
 }
 
+std::string formatTransitionCode(int &srcStateNum, int &dstStateNum,
+                                 std::array<bool, 4> &currentConditions, cstring &otherMatch) {
+    //il faut gérer les else correctement
+    std::string dstStateWrite =
+        (std::ostringstream() << "reg_state.write(flowblaze_metadata.update_state_index, (bit<16>)"
+                              << dstStateNum << ");")
+            .str();
+    std::string conditionsIfs = dstStateWrite;
+    for (size_t i = 0; i < currentConditions.size(); i++) {
+        if (currentConditions.at(i)) {
+            conditionsIfs =
+                (std::ostringstream()
+                 << "if (flowblaze_metadata.c" << i << " == " << currentConditions.at(i)
+                 << ") {\n    " << std::regex_replace(conditionsIfs, std::regex("\n"), "\n    ")
+                 << "\n}")
+                    .str();
+        }
+    }
+    auto transitionCode = std::ostringstream()
+                          << "\nif (flowblaze_metadata.state == " << srcStateNum << ") {\n"
+                          << std::regex_replace(conditionsIfs, std::regex("\n"), "\n    ") << "\n}";
+
+    return transitionCode.str();
+}
+
 void parseStateAction(std::vector<RegActPar> &regActionsParsedVec,
                       const std::map<cstring, int> &operations, cstring &actionTableCommands,
                       int &currentPktAction, int &srcStateNum) {
@@ -419,7 +448,7 @@ void parseTransition(const IR::Expression *selectExpression,
                      std::vector<cstring> &flowDataVariables, std::vector<cstring> stateStringToNum,
                      const std::map<cstring, int> &registers,
                      std::vector<std::string> &otherMatches, cstring &transitionCommands,
-                     int &srcStateNum) {
+                     std::string &transitionCodes, int &srcStateNum) {
     if (selectExpression->is<IR::SelectExpression>()) {
         auto selectExpr = selectExpression->as<IR::SelectExpression>();
         std::vector<CondPar> selectArgs;
@@ -448,6 +477,9 @@ void parseTransition(const IR::Expression *selectExpression,
             cstring transitionCommand =
                 formatTransitionCommand(srcStateNum, dstStateNum, currentConditions, matchStr);
             transitionCommands += transitionCommand;
+            std::string transitionCode =
+                formatTransitionCode(srcStateNum, dstStateNum, currentConditions, matchStr);
+            transitionCodes += std::regex_replace(transitionCode, std::regex("\n"), "\n        ");
         }
     } else if (selectExpression->is<IR::PathExpression>()) {
         std::array<bool, 4 /*MAX_CONDITIONS*/> currentConditions = {false, false, false, false};
@@ -463,6 +495,9 @@ void parseTransition(const IR::Expression *selectExpression,
         cstring transitionCommand =
             formatTransitionCommand(srcStateNum, dstStateNum, currentConditions, matchStr);
         transitionCommands += transitionCommand;
+        std::string transitionCode =
+            formatTransitionCode(srcStateNum, dstStateNum, currentConditions, matchStr);
+        transitionCodes += std::regex_replace(transitionCode, std::regex("\n"), "\n        ");
     }
 }
 
@@ -482,12 +517,28 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
     const std::map<cstring, uint> conditions = {{"NOP", 0b000}, {"==", 0b001}, {">=", 0b011},
                                                 {"<=", 0b101},  {">", 0b010},  {"<", 0b100}};
 
+    const std::map<cstring, int>;
+
     for (const auto *state : efsm->states) {
         stateStringToNum.push_back(state->name.toString());
     }
 
     cstring actionTableCommands = "";
     cstring transitionCommands = "";
+    std::string transitionCodes =
+        R"(// ----------------------- UPDATE STATE BLOCK ----------------------------------
+control UpdateState(inout HEADER_NAME hdr,
+                    inout flowblaze_t flowblaze_metadata,
+                    in standard_metadata_t standard_metadata) {
+
+    apply{
+        // Calculate update lookup index
+        // TODO: (improvement) save hash in metadata when calculated for reading registers
+        hash(flowblaze_metadata.update_state_index,
+             HashAlgorithm.crc32,
+             (bit<32>) 0,
+             FLOW_SCOPE,
+             (bit<32>) CONTEXT_TABLE_SIZE);)";
 
     for (const auto *state : efsm->states) {
         std::vector<RegActPar> regActionsParsedVec;
@@ -506,7 +557,7 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
 
         parseTransition(state->selectExpression, conditions, conditionsParsedVec,
                         globalDataVariables, flowDataVariables, stateStringToNum, registers,
-                        otherMatches, transitionCommands, srcStateNum);
+                        otherMatches, transitionCommands, transitionCodes, srcStateNum);
     }
 
     cstring conditionEntry = formatConditionParsed(conditionsParsedVec, conditions);
@@ -519,6 +570,11 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
       << actionTableCommands << std::endl
       << transitionCommands << std::endl;
     o.close();
+
+    transitionCodes += "\n    }\n}\n";
+    std::ofstream olib("efsm-lib-content.p4");
+    olib << transitionCodes << std::endl;
+    olib.close();
 
     return nullptr;
 }
