@@ -91,7 +91,7 @@ const IR::P4Program *parseP4File(ParserOptions &options) {
     options.closeInput(in);
 
     if (options.isf4()) {
-        F4::Converter converter(options.efsmBackend);
+        F4::Converter converter;
         result = result->apply(converter);
 
         std::string file(options.file);

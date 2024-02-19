@@ -557,18 +557,15 @@ const IR::Node *EfsmToDfaSynthesis::preorder(IR::P4Efsm * /*efsm*/) {
     return nullptr;
 }
 
-Converter::Converter(ParserOptions::EfsmBackendType efsmBackend)
+Converter::Converter()
     : classSettingsMap(new std::map<cstring, ClassSettings>()),
       instanceToClassNameMap(new std::map<cstring, cstring>()) {
     setName("Converter");
 
     passes.emplace_back(new RegisterClass(classSettingsMap));
     passes.emplace_back(new ExtendP4Class(classSettingsMap, instanceToClassNameMap));
-    if (efsmBackend == ParserOptions::EfsmBackendType::FLOWBLAZE_P4) {
-        passes.emplace_back(new EfsmToFlowBlaze());
-    } else if (efsmBackend == ParserOptions::EfsmBackendType::DFA_SYNTHESIS) {
-        passes.emplace_back(new EfsmToDfaSynthesis());
-    }
+    passes.emplace_back(new EfsmToFlowBlaze());
+    passes.emplace_back(new EfsmToDfaSynthesis());
 }
 
 Visitor::profile_t Converter::init_apply(const IR::Node *node) {
