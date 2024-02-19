@@ -19,29 +19,6 @@ limitations under the License.
 #include <array>
 #include <fstream>
 
-/*#include <algorithm>
-#include <bitset>
-#include <cstddef>
-#include <cstring>
-#include <iomanip>
-#include <iterator>
-#include <map>
-#include <sstream>
-#include <string>
-#include <vector>
-
-#include "frontends/common/constantFolding.h"
-#include "frontends/common/options.h"
-#include "frontends/common/parser_options.h"
-#include "frontends/common/resolveReferences/referenceMap.h"
-#include "frontends/common/resolveReferences/resolveReferences.h"
-#include "frontends/p4/coreLibrary.h"
-#include "ir/indexed_vector.h"
-#include "ir/ir-generated.h"
-#include "lib/big_int_util.h"
-#include "lib/cstring.h"
-#include "lib/exceptions.h"*/
-
 enum {
     MAX_REG_ACTIONS_PER_TRANSITION = 3,
     MAX_CONDITIONS = 4,
@@ -409,15 +386,19 @@ cstring formatEfsmTableCommand(int &srcStateNum, int &dstStateNum,
                                std::array<bool, 4> &currentConditions, int &currentPktAction,
                                cstring &actionsForEfsm, cstring &otherMatch) {
     cstring efsmTableCommand = "table_add FlowBlaze.EFSM_table define_operation_update_state ";
+    cstring transitionTableCommand = "table_add FlowBlaze.transition_table define_transition ";
     cstring conditionList = "";
     for (int i = 0; i < 4; i++) {
         conditionList += currentConditions.at(i) ? "1&&&1 " : "0&&&0 ";
     }
-    efsmTableCommand += std::to_string(srcStateNum) + "&&&0xFFFF " + conditionList + otherMatch +
-                        " => " + std::to_string(dstStateNum) + " " + actionsForEfsm +
+    efsmTableCommand += std::to_string(srcStateNum) + "&&&0xFFFF " +
+                        " => " + actionsForEfsm +
                         std::to_string(currentPktAction) + " 1"  // priority
                         + "\n";
-    return efsmTableCommand;
+    transitionTableCommand += std::to_string(srcStateNum) + "&&&0xFFFF " + conditionList + otherMatch +
+                              " => " + std::to_string(dstStateNum) + " 1" // priority
+                              + "\n";
+    return (efsmTableCommand + transitionTableCommand);
 }
 
 void parseTransition(
