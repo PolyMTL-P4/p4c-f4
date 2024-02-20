@@ -19,17 +19,17 @@ limitations under the License.
 #include <array>
 #include <cstddef>
 #include <fstream>
+#include <map>
 #include <regex>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "lib/cstring.h"
 
 enum {
     MAX_REG_ACTIONS_PER_TRANSITION = 3,
     MAX_CONDITIONS = 4,
-    FDV_BASE_REGISTER = 0x00,
-    GDV_BASE_REGISTER = 0x0F,
     REVERSE_CONDITION_XOR = 0b111,
     SWAP_CONDITION_XOR = 0b110
 };
@@ -168,17 +168,6 @@ void insertIfNotInVec(std::vector<T> &vector, T element) {
     }
 }
 
-cstring intToHexStr(int number) {
-    std::ostringstream oss;
-    oss << "0x" << std::hex << number;
-    return oss.str();
-}
-
-cstring intToBinStr(uint number) {
-    std::bitset<sizeof(number)> bs(number);
-    return ("0b" + bs.to_string());
-}
-
 void parseActionCall(const IR::MethodCallStatement *actionCall,
                      std::vector<std::pair<cstring, IR::MethodCallStatement>> &calledPktActionsMap,
                      int &currentPktAction) {
@@ -192,7 +181,6 @@ void parseActionCall(const IR::MethodCallStatement *actionCall,
     } else {
         currentPktAction = static_cast<int>(std::distance(calledPktActionsMap.begin(), it));
     }
-    currentPktAction = currentPktAction + 1;
 }
 
 void fillActionOrConditionParsed(const IR::Expression *expr, std::string &sideOp,
@@ -225,7 +213,7 @@ void parseRegAction(RegActPar &actionParsed, const IR::AssignmentStatement *varA
         uint elemPos = findPositionInVector(globalDataVariables, res);
         actionParsed.resultOp =
             "reg_G" + std::to_string(elemPos) + ".write(" + std::to_string(elemPos) + ", ";
-    } else {  // gérer les erreurs également
+    } else {  // handle non-valid results like constants
         insertIfNotInVec(flowDataVariables, res);
         int elemPos = findPositionInVector(flowDataVariables, res);
         actionParsed.resultOp =
@@ -241,8 +229,8 @@ void parseRegAction(RegActPar &actionParsed, const IR::AssignmentStatement *varA
     } else {
         fillActionOrConditionParsed(varAss->right, actionParsed.leftOp, globalDataVariables,
                                     flowDataVariables);
-        actionParsed.operationStr = "+";
-        actionParsed.rightOp = "0";
+        actionParsed.operationStr = "";
+        actionParsed.rightOp = "";
     }
 }
 
@@ -304,7 +292,7 @@ void insertCondition(const CondPar &conditionTrue, const std::map<cstring, uint>
 void parseKeyset(const IR::Expression *expr, CondPar &selectArg,
                  const std::map<cstring, uint> &conditions,
                  std::vector<CondPar> &conditionsParsedVec, std::array<bool, 4> &currentConditions,
-                 std::vector<std::string> &otherMatches, cstring &matchStr) {
+                 std::vector<std::pair<std::string, std::string>> &otherMatchesParsedVec) {
     bool defaultCase = expr->is<IR::DefaultExpression>();
     cstring transitionSymbol = expr->toString();
     if (selectArg.matchVariable.empty()) {
@@ -319,36 +307,34 @@ void parseKeyset(const IR::Expression *expr, CondPar &selectArg,
         }
     } else {
         if (defaultCase) {
-            matchStr += "0&&&0 ";
+            // handle
         } else {
-            insertIfNotInVec(otherMatches, selectArg.matchVariable);
             cstring matchValue = transitionSymbol;
-            cstring mask = "0x";
-            for (size_t i = 0; i < strlen(matchValue); i++) {
-                mask += "F";
-            }
-            matchStr += matchValue + "&&&" + mask + " ";
+            otherMatchesParsedVec.emplace_back(selectArg.matchVariable, matchValue);
         }
     }
 }
 
 std::string formatAssignmentsCode(int &srcStateNum, std::vector<RegActPar> &regActionsParsedVec) {
     // TODO(florent): handle else
-    std::string assignmentCode =
-        "        if (flowblaze_metadata.state == " + std::to_string(srcStateNum) + ") {\n";
-    for (const auto &regActionParsed : regActionsParsedVec) {
-        assignmentCode += "            t_result = " + regActionParsed.leftOp + " " +
-                          regActionParsed.operationStr + " " + regActionParsed.rightOp + ";\n";
-        assignmentCode += "            " + regActionParsed.resultOp + "t_result);\n";
+    if (!regActionsParsedVec.empty()) {
+        std::string assignmentCode =
+            "        if (flowblaze_metadata.state == " + std::to_string(srcStateNum) + ") {\n";
+        for (const auto &regActionParsed : regActionsParsedVec) {
+            assignmentCode += "            t_result = " + regActionParsed.leftOp + " " +
+                              regActionParsed.operationStr + " " + regActionParsed.rightOp + ";\n";
+            assignmentCode += "            " + regActionParsed.resultOp + "t_result);\n";
+        }
+        assignmentCode += "        }\n";
+        return assignmentCode;
     }
-    assignmentCode += "        }\n";
-    return assignmentCode;
+    return "";
 }
 
 cstring formatEfsmTableCommand(
     int &srcStateNum, std::vector<std::pair<cstring, IR::MethodCallStatement>> &calledPktActionsMap,
     int &currentPktAction) {
-    auto actionCall = calledPktActionsMap.at(currentPktAction - 1).second;
+    auto actionCall = calledPktActionsMap.at(currentPktAction).second;
     cstring argStr = "";
     for (const auto *argument : *actionCall.methodCall->arguments) {
         argStr += argument->toString() + " ";
@@ -360,31 +346,30 @@ cstring formatEfsmTableCommand(
     return (efsmTableCommand);
 }
 
-std::string formatTransitionCode(int &srcStateNum, int &dstStateNum,
-                                 std::vector<CondPar> &conditionsParsedVec,
-                                 std::array<bool, 4> &currentConditions, cstring &otherMatch) {
+std::string formatTransitionCode(
+    int &dstStateNum, std::vector<CondPar> &conditionsParsedVec,
+    std::array<bool, 4> &currentConditions,
+    std::vector<std::pair<std::string, std::string>> &otherMatchesParsedVec) {
     // il faut gérer les else correctement
-    std::string dstStateWrite =
-        (std::ostringstream() << "reg_state.write(flowblaze_metadata.update_state_index, (bit<16>)"
-                              << dstStateNum << ");")
-            .str();
-    std::string conditionsIfs = dstStateWrite;
+    std::string conditionsIfs =
+        "\nreg_state.write(flowblaze_metadata.update_state_index, (bit<16>)" +
+        std::to_string(dstStateNum) + ");";
+    for (auto &match : otherMatchesParsedVec) {
+        std::string matchVariable = match.first;
+        std::string matchValue = match.second;
+        conditionsIfs = "\nif (" + matchVariable + " == " + matchValue + ") {" +
+                        std::regex_replace(conditionsIfs, std::regex("\n"), "\n    ") + "\n}";
+    }
     for (size_t i = 0; i < currentConditions.size(); i++) {
         if (currentConditions.at(i)) {
             CondPar condition = conditionsParsedVec.at(i);
-            conditionsIfs =
-                (std::ostringstream()
-                 << "if (" << condition.leftOp << condition.condStr << condition.rightOp
-                 << ") {\n    " << std::regex_replace(conditionsIfs, std::regex("\n"), "\n    ")
-                 << "\n}")
-                    .str();
+            conditionsIfs = "\nif (" + condition.leftOp + condition.condStr + condition.rightOp +
+                            ") {" + std::regex_replace(conditionsIfs, std::regex("\n"), "\n    ") +
+                            "\n}";
         }
-    }
-    auto transitionCode = std::ostringstream()
-                          << "\nif (flowblaze_metadata.state == " << srcStateNum << ") {\n"
-                          << std::regex_replace(conditionsIfs, std::regex("\n"), "\n    ") << "\n}";
+    };
 
-    return transitionCode.str();
+    return std::regex_replace(conditionsIfs, std::regex("\n"), "\n    ");
 }
 
 void parseTransition(const IR::Expression *selectExpression,
@@ -392,8 +377,9 @@ void parseTransition(const IR::Expression *selectExpression,
                      std::vector<CondPar> &conditionsParsedVec,
                      std::vector<cstring> &globalDataVariables,
                      std::vector<cstring> &flowDataVariables, std::vector<cstring> stateStringToNum,
-                     std::vector<std::string> &otherMatches, std::string &transitionCodes,
-                     int &srcStateNum) {
+                     std::string &transitionCodes, int &srcStateNum) {
+    transitionCodes +=
+        "\n        if (flowblaze_metadata.state == " + std::to_string(srcStateNum) + ") {";
     if (selectExpression->is<IR::SelectExpression>()) {
         auto selectExpr = selectExpression->as<IR::SelectExpression>();
         std::vector<CondPar> selectArgs;
@@ -402,43 +388,37 @@ void parseTransition(const IR::Expression *selectExpression,
                               flowDataVariables);
 
         for (const auto *sCase : selectExpr.selectCases) {
-            cstring matchStr = "";
+            std::vector<std::pair<std::string, std::string>> otherMatchesParsedVec;
             std::array<bool, 4 /*MAX_CONDITIONS*/> currentConditionsResults = {false, false, false,
                                                                                false};
-            // cstring transitionSymbol = sCase->keyset->toString();
             if (sCase->keyset->is<IR::ListExpression>()) {
-                auto lesExpr = sCase->keyset->as<IR::ListExpression>();
-                int i = 0;
-                for (const auto *expr : lesExpr.components) {
-                    parseKeyset(expr, selectArgs.at(i), conditions, conditionsParsedVec,
-                                currentConditionsResults, otherMatches, matchStr);
-                    i++;
+                auto exprList = sCase->keyset->as<IR::ListExpression>();
+                for (size_t i = 0; i < exprList.components.size(); i++) {
+                    parseKeyset(exprList.components.at(i), selectArgs.at(i), conditions,
+                                conditionsParsedVec, currentConditionsResults,
+                                otherMatchesParsedVec);
                 }
             } else {
                 parseKeyset(sCase->keyset, selectArgs.at(0), conditions, conditionsParsedVec,
-                            currentConditionsResults, otherMatches, matchStr);
+                            currentConditionsResults, otherMatchesParsedVec);
             }
             cstring dstState = sCase->state->toString();
             int dstStateNum = findPositionInVector(stateStringToNum, dstState);
             std::string transitionCode = formatTransitionCode(
-                srcStateNum, dstStateNum, conditionsParsedVec, currentConditionsResults, matchStr);
+                dstStateNum, conditionsParsedVec, currentConditionsResults, otherMatchesParsedVec);
             transitionCodes += std::regex_replace(transitionCode, std::regex("\n"), "\n        ");
         }
     } else if (selectExpression->is<IR::PathExpression>()) {
+        // otherMatchesParsedVec volontairement vide
+        std::vector<std::pair<std::string, std::string>> otherMatchesParsedVec;
         std::array<bool, 4 /*MAX_CONDITIONS*/> currentConditions = {false, false, false, false};
-        cstring emptyMatch = "0&&&0 ";
-        cstring matchStr = "";
-        // c’est sketchy, les variables de matchs devraient être déclarées avant l’EFSM et on
-        // devrait les récupérer à cet endroit là
-        for (size_t i = 0; i < otherMatches.size(); i++) {
-            matchStr += emptyMatch;
-        }
         cstring dstState = selectExpression->toString();
         int dstStateNum = findPositionInVector(stateStringToNum, dstState);
-        std::string transitionCode = formatTransitionCode(
-            srcStateNum, dstStateNum, conditionsParsedVec, currentConditions, matchStr);
+        std::string transitionCode = formatTransitionCode(dstStateNum, conditionsParsedVec,
+                                                          currentConditions, otherMatchesParsedVec);
         transitionCodes += std::regex_replace(transitionCode, std::regex("\n"), "\n        ");
     }
+    transitionCodes += "\n        }";
 }
 
 const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
@@ -447,7 +427,6 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
     std::vector<cstring> globalDataVariables;
     std::vector<cstring> flowDataVariables;
     std::vector<CondPar> conditionsParsedVec;
-    std::vector<std::string> otherMatches;
 
     const std::map<cstring, uint> conditions = {{"NOP", 0b000}, {"==", 0b001}, {">=", 0b011},
                                                 {"<=", 0b101},  {">", 0b010},  {"<", 0b100}};
@@ -492,7 +471,6 @@ control UpdateState(inout HEADER_NAME hdr,
     for (const auto *state : efsm->states) {
         std::vector<RegActPar> regActionsParsedVec;
         int currentPktAction = 0;
-        // std::array<bool, MAX_CONDITIONS> currentConditions = {false, false, false, false};
         cstring srcState = state->name.toString();
         int srcStateNum = findPositionInVector(stateStringToNum, srcState);
 
@@ -507,8 +485,8 @@ control UpdateState(inout HEADER_NAME hdr,
         assignmentsCode += formatAssignmentsCode(srcStateNum, regActionsParsedVec);
 
         parseTransition(state->selectExpression, conditions, conditionsParsedVec,
-                        globalDataVariables, flowDataVariables, stateStringToNum, otherMatches,
-                        transitionCode, srcStateNum);
+                        globalDataVariables, flowDataVariables, stateStringToNum, transitionCode,
+                        srcStateNum);
     }
 
     std::ofstream o("flowblaze-table-commands.txt");
