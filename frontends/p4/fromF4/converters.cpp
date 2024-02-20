@@ -350,7 +350,7 @@ std::string formatTransitionCode(
     int &dstStateNum, std::vector<CondPar> &conditionsParsedVec,
     std::array<bool, 4> &currentConditions,
     std::vector<std::pair<std::string, std::string>> &otherMatchesParsedVec) {
-    // il faut gérer les else correctement
+    // TODO(florent): include else statements and don’t write to register if same state
     std::string conditionsIfs =
         "\nreg_state.write(flowblaze_metadata.update_state_index, (bit<16>)" +
         std::to_string(dstStateNum) + ");";
@@ -404,9 +404,13 @@ void parseTransition(const IR::Expression *selectExpression,
             }
             cstring dstState = sCase->state->toString();
             int dstStateNum = findPositionInVector(stateStringToNum, dstState);
-            std::string transitionCode = formatTransitionCode(
-                dstStateNum, conditionsParsedVec, currentConditionsResults, otherMatchesParsedVec);
-            transitionCodes += std::regex_replace(transitionCode, std::regex("\n"), "\n        ");
+            if (dstStateNum != srcStateNum) {
+                std::string transitionCode =
+                    formatTransitionCode(dstStateNum, conditionsParsedVec, currentConditionsResults,
+                                         otherMatchesParsedVec);
+                transitionCodes +=
+                    std::regex_replace(transitionCode, std::regex("\n"), "\n        ");
+            }
         }
     } else if (selectExpression->is<IR::PathExpression>()) {
         // otherMatchesParsedVec volontairement vide
@@ -414,9 +418,11 @@ void parseTransition(const IR::Expression *selectExpression,
         std::array<bool, 4 /*MAX_CONDITIONS*/> currentConditions = {false, false, false, false};
         cstring dstState = selectExpression->toString();
         int dstStateNum = findPositionInVector(stateStringToNum, dstState);
-        std::string transitionCode = formatTransitionCode(dstStateNum, conditionsParsedVec,
-                                                          currentConditions, otherMatchesParsedVec);
-        transitionCodes += std::regex_replace(transitionCode, std::regex("\n"), "\n        ");
+        if (dstStateNum != srcStateNum) {
+            std::string transitionCode = formatTransitionCode(
+                dstStateNum, conditionsParsedVec, currentConditions, otherMatchesParsedVec);
+            transitionCodes += std::regex_replace(transitionCode, std::regex("\n"), "\n        ");
+        }
     }
     transitionCodes += "\n        }";
 }
