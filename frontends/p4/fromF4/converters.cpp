@@ -34,7 +34,6 @@ enum {
 
 struct RegActPar {
     std::string resultOp;
-    cstring operation;
     std::string operationStr;
     std::string leftOp;
     std::string rightOp;
@@ -217,8 +216,7 @@ void fillActionOrConditionParsed(const IR::Expression *expr, std::string &sideOp
 
 void parseRegAction(RegActPar &actionParsed, const IR::AssignmentStatement *varAss,
                     std::vector<cstring> &globalDataVariables,
-                    std::vector<cstring> &flowDataVariables,
-                    const std::map<cstring, int> &operations) {
+                    std::vector<cstring> &flowDataVariables) {
     cstring res = varAss->left->toString();
     if (strncmp(res, "#", 1) == 0) {
         insertIfNotInVec(globalDataVariables, res);
@@ -235,14 +233,12 @@ void parseRegAction(RegActPar &actionParsed, const IR::AssignmentStatement *varA
         const auto *opTotal = varAss->right->to<IR::Operation_Binary>();
         fillActionOrConditionParsed(opTotal->left, actionParsed.leftOp, globalDataVariables,
                                     flowDataVariables);
-        actionParsed.operation = intToHexStr(operations.at(opTotal->getStringOp()));
         actionParsed.operationStr = opTotal->getStringOp();
         fillActionOrConditionParsed(opTotal->right, actionParsed.rightOp, globalDataVariables,
                                     flowDataVariables);
     } else {
         fillActionOrConditionParsed(varAss->right, actionParsed.leftOp, globalDataVariables,
                                     flowDataVariables);
-        actionParsed.operation = intToHexStr(operations.at("+"));
         actionParsed.operationStr = "+";
         actionParsed.rightOp = "0";
     }
@@ -252,14 +248,13 @@ void parseStatement(const IR::StatOrDecl *line,
                     std::vector<std::pair<cstring, IR::MethodCallStatement>> &calledPktActionsMap,
                     std::vector<RegActPar> &regActionsParsed,
                     std::vector<cstring> &globalDataVariables,
-                    std::vector<cstring> &flowDataVariables,
-                    const std::map<cstring, int> &operations, int &currentPktAction) {
+                    std::vector<cstring> &flowDataVariables, int &currentPktAction) {
     if (line->is<IR::MethodCallStatement>()) {
         parseActionCall(line->to<IR::MethodCallStatement>(), calledPktActionsMap, currentPktAction);
     } else if (line->is<IR::AssignmentStatement>()) {
-        RegActPar actionParsed = {"", "0", "", "", ""};
+        RegActPar actionParsed = {"", "", "", ""};
         parseRegAction(actionParsed, line->to<IR::AssignmentStatement>(), globalDataVariables,
-                       flowDataVariables, operations);
+                       flowDataVariables);
         regActionsParsed.emplace_back(actionParsed);
     } else {
         cstring errorMsg = "Non identified statement: " + line->toString();
@@ -465,9 +460,6 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
     std::vector<CondPar> conditionsParsedVec;
     std::vector<std::string> otherMatches;
 
-    const std::map<cstring, int> operations = {{"NOP", 0}, {"+", 1},  {"-", 2},
-                                               {">>", 3},  {"<<", 4}, {"*", 5}};
-
     const std::map<cstring, uint> conditions = {{"NOP", 0b000}, {"==", 0b001}, {">=", 0b011},
                                                 {"<=", 0b101},  {">", 0b010},  {"<", 0b100}};
 
@@ -517,7 +509,7 @@ control UpdateState(inout HEADER_NAME hdr,
 
         for (const auto *line : state->components) {
             parseStatement(line, calledPktActionsMap, regActionsParsedVec, globalDataVariables,
-                           flowDataVariables, operations, currentPktAction);
+                           flowDataVariables, currentPktAction);
         }
 
         cstring efsmTableCommand = formatEfsmTableCommand(srcStateNum, currentPktAction);
