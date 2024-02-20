@@ -23,6 +23,8 @@ limitations under the License.
 #include <sstream>
 #include <string>
 
+#include "lib/cstring.h"
+
 enum {
     MAX_REG_ACTIONS_PER_TRANSITION = 3,
     MAX_CONDITIONS = 4,
@@ -330,44 +332,31 @@ void parseKeyset(const IR::Expression *expr, CondPar &selectArg,
     }
 }
 
-std::string formatActionCode(int &srcStateNum, std::vector<RegActPar> &regActionsParsedVec) {
+std::string formatAssignmentsCode(int &srcStateNum, std::vector<RegActPar> &regActionsParsedVec) {
     // TODO(florent): handle else
-    std::string actionCode =
+    std::string assignmentCode =
         "        if (flowblaze_metadata.state == " + std::to_string(srcStateNum) + ") {\n";
     for (const auto &regActionParsed : regActionsParsedVec) {
-        actionCode += "            t_result = " + regActionParsed.leftOp + " " +
-                      regActionParsed.operationStr + " " + regActionParsed.rightOp + ";\n";
-        actionCode += "            " + regActionParsed.resultOp + "t_result);\n";
+        assignmentCode += "            t_result = " + regActionParsed.leftOp + " " +
+                          regActionParsed.operationStr + " " + regActionParsed.rightOp + ";\n";
+        assignmentCode += "            " + regActionParsed.resultOp + "t_result);\n";
     }
-    actionCode += "        }\n";
-    return actionCode;
+    assignmentCode += "        }\n";
+    return assignmentCode;
 }
 
-cstring formatPktActionsCommands(
-    std::vector<std::pair<cstring, IR::MethodCallStatement>> &calledPktActionsMap) {
-    cstring pktActionsTableEntries = "";
-    for (int i = 0; static_cast<size_t>(i) < calledPktActionsMap.size(); i++) {
-        auto actionCall = calledPktActionsMap.at(i).second;
-        cstring argStr = "";
-        for (const auto *argument : *actionCall.methodCall->arguments) {
-            argStr += argument->toString() + " ";
-        }
-        cstring pktActionEntry = "table_add FlowBlaze.pkt_action " +
-                                 actionCall.methodCall->method->toString() + " " +
-                                 intToHexStr(i + 1) + "&&&0xFF => "  // action_match
-                                 + argStr                            // action parameters
-                                 + "10"                              // priority
-                                 + "\n";
-        pktActionsTableEntries += pktActionEntry;
+cstring formatEfsmTableCommand(
+    int &srcStateNum, std::vector<std::pair<cstring, IR::MethodCallStatement>> &calledPktActionsMap,
+    int &currentPktAction) {
+    auto actionCall = calledPktActionsMap.at(currentPktAction - 1).second;
+    cstring argStr = "";
+    for (const auto *argument : *actionCall.methodCall->arguments) {
+        argStr += argument->toString() + " ";
     }
-    return pktActionsTableEntries;
-}
-
-cstring formatEfsmTableCommand(int &srcStateNum, int &currentPktAction) {
-    cstring efsmTableCommand = "table_add FlowBlaze.EFSM_table define_operation_update_state ";
-    efsmTableCommand += std::to_string(srcStateNum) + "&&&0xFFFF " + " => " +
-                        std::to_string(currentPktAction) + " 1"  // priority
-                        + "\n";
+    std::string efsmTableCommand =
+        "table_add FlowBlaze.EFSM_table " + actionCall.methodCall->method->toString() + " " +
+        std::to_string(srcStateNum) + "&&&0xFFFF " + " => " + argStr + " 10"  // priority
+        + "\n";
     return (efsmTableCommand);
 }
 
@@ -468,7 +457,7 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
     }
 
     cstring efsmTableCommands = "";
-    std::string actionsCode =
+    std::string assignmentsCode =
         R"(// ----------------------- UPDATE LOGIC BLOCK ----------------------------------
 control UpdateLogic(inout HEADER_NAME hdr,
                     inout flowblaze_t flowblaze_metadata,
@@ -512,25 +501,24 @@ control UpdateState(inout HEADER_NAME hdr,
                            flowDataVariables, currentPktAction);
         }
 
-        cstring efsmTableCommand = formatEfsmTableCommand(srcStateNum, currentPktAction);
+        cstring efsmTableCommand =
+            formatEfsmTableCommand(srcStateNum, calledPktActionsMap, currentPktAction);
         efsmTableCommands += efsmTableCommand;
-        actionsCode += formatActionCode(srcStateNum, regActionsParsedVec);
+        assignmentsCode += formatAssignmentsCode(srcStateNum, regActionsParsedVec);
 
         parseTransition(state->selectExpression, conditions, conditionsParsedVec,
                         globalDataVariables, flowDataVariables, stateStringToNum, otherMatches,
                         transitionCode, srcStateNum);
     }
 
-    cstring pktActionsCommands = formatPktActionsCommands(calledPktActionsMap);
-
     std::ofstream o("flowblaze-table-commands.txt");
-    o << pktActionsCommands << std::endl << efsmTableCommands << std::endl;
+    o << efsmTableCommands << std::endl;
     o.close();
 
-    actionsCode += "\n    }\n}\n";
+    assignmentsCode += "\n    }\n}\n";
     transitionCode += "\n    }\n}\n";
     std::ofstream olib("efsm-lib-content.p4");
-    olib << actionsCode << std::endl << transitionCode << std::endl;
+    olib << assignmentsCode << std::endl << transitionCode << std::endl;
     olib.close();
 
     return nullptr;
