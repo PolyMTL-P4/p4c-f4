@@ -48,20 +48,13 @@ struct CondPar {
     std::string condStr;
     std::string leftOp;
     std::string rightOp;
-    std::string op1;
-    std::string op2;
-    std::string operand1;
-    std::string operand2;
     std::string matchVariable;
     bool operator==(const CondPar &laCond) const {
         return ((cond == laCond.cond) && (condStr == laCond.condStr) && (leftOp == laCond.leftOp) &&
-                (rightOp == laCond.rightOp) && (op1 == laCond.op1) && (op2 == laCond.op2) &&
-                (operand1 == laCond.operand1) && (operand2 == laCond.operand2) &&
-                (matchVariable == laCond.matchVariable)) ||
+                (rightOp == laCond.rightOp) && (matchVariable == laCond.matchVariable)) ||
                (((cond ^ SWAP_CONDITION_XOR) == laCond.cond) && (condStr == laCond.condStr) &&
-                (leftOp == laCond.leftOp) && (rightOp == laCond.rightOp) && (op2 == laCond.op1) &&
-                (op1 == laCond.op2) && (operand2 == laCond.operand1) &&
-                (operand1 == laCond.operand2) && (matchVariable == laCond.matchVariable));
+                (leftOp == laCond.leftOp) && (rightOp == laCond.rightOp) &&
+                (matchVariable == laCond.matchVariable));
     }
 };
 
@@ -204,6 +197,27 @@ void parseActionCall(const IR::MethodCallStatement *actionCall,
     currentPktAction = currentPktAction + 1;
 }
 
+void fillConditionParsed(const IR::Expression *expr, std::string &sideOp,
+                         std::vector<cstring> &globalDataVariables,
+                         std::vector<cstring> &flowDataVariables) {
+    cstring laStr = expr->toString();
+    if (expr->is<IR::Constant>()) {
+        sideOp = laStr;
+    } else if (strncmp(laStr, "#", 1) == 0) {
+        insertIfNotInVec(globalDataVariables, laStr);
+        uint elemPos = findPositionInVector(globalDataVariables, laStr);
+        sideOp = "flowblaze_metadata.G" + std::to_string(elemPos);
+    } else if (strcmp(laStr, "now") == 0) {
+        sideOp = "(bit<32>)standard_metadata.ingress_global_timestamp";
+    } else if (strcmp(laStr, "meta") == 0) {
+        sideOp = "flowblaze_metadata.pkt_data";
+    } else {
+        insertIfNotInVec(flowDataVariables, laStr);
+        int elemPos = findPositionInVector(flowDataVariables, laStr);
+        sideOp = "flowblaze_metadata.R" + std::to_string(elemPos);
+    }
+}
+
 void fillActionParsed(const IR::Expression *expr, std::string &opX, std::string &operandX,
                       std::string &sideOp, std::vector<cstring> &globalDataVariables,
                       std::vector<cstring> &flowDataVariables,
@@ -290,20 +304,17 @@ void parseAction(const IR::StatOrDecl *ligne,
 void parseConditionOrMatch(const IR::SelectExpression &selectExpr, std::vector<CondPar> &selectArgs,
                            const std::map<cstring, uint> &conditions,
                            std::vector<cstring> &globalDataVariables,
-                           std::vector<cstring> &flowDataVariables,
-                           const std::map<cstring, int> &registers) {
+                           std::vector<cstring> &flowDataVariables) {
     for (const auto *conditionOrMatch : selectExpr.select->components) {
-        CondPar conditionParsed = {0, "", "", "", "0", "0", "0", "0", ""};
+        CondPar conditionParsed = {0, "", "", "", ""};
         if (conditionOrMatch->is<IR::Operation_Relation>()) {
             const auto *cond = conditionOrMatch->to<IR::Operation_Relation>();
             conditionParsed.cond = conditions.at(cond->getStringOp());
             conditionParsed.condStr = cond->getStringOp();
-            fillActionParsed(cond->left, conditionParsed.op1, conditionParsed.operand1,
-                             conditionParsed.leftOp, globalDataVariables, flowDataVariables,
-                             registers);
-            fillActionParsed(cond->right, conditionParsed.op2, conditionParsed.operand2,
-                             conditionParsed.rightOp, globalDataVariables, flowDataVariables,
-                             registers);
+            fillConditionParsed(cond->left, conditionParsed.leftOp, globalDataVariables,
+                                flowDataVariables);
+            fillConditionParsed(cond->right, conditionParsed.rightOp, globalDataVariables,
+                                flowDataVariables);
         } else {
             conditionParsed.matchVariable = conditionOrMatch->toString();
         }
@@ -325,10 +336,6 @@ void insertCondition(const CondPar &conditionTrue, const std::map<cstring, uint>
                                condStr,
                                conditionTrue.leftOp,
                                conditionTrue.rightOp,
-                               conditionTrue.op1,
-                               conditionTrue.op2,
-                               conditionTrue.operand1,
-                               conditionTrue.operand2,
                                conditionTrue.matchVariable};
     insertIfNotInVec(conditionsParsedVec, conditionParsed);
     currentConditions.at(findPositionInVector(conditionsParsedVec, conditionParsed)) = true;
@@ -381,31 +388,6 @@ cstring formatActionParsed(std::vector<RegActPar> &regActionsParsedVec,
     return actionsForEfsm;
 }
 
-cstring formatConditionsCommand(std::vector<CondPar> &conditionsParsedVec,
-                                const std::map<cstring, uint> &conditions) {
-    cstring conditionsCommand = "table_set_default FlowBlaze.condition_table set_condition_fields ";
-    for (size_t i = 0; i < MAX_CONDITIONS; i++) {
-        if (i < conditionsParsedVec.size()) {
-            auto conditionParsed = conditionsParsedVec.at(i);
-            conditionsCommand += intToBinStr(conditionParsed.cond) + " " + conditionParsed.op1 +
-                                 " " + conditionParsed.op2 + " " + conditionParsed.operand1 + " " +
-                                 conditionParsed.operand2 + " ";
-        } else {
-            conditionsCommand += intToBinStr(conditions.at("NOP")) + " 0 0 0 0 ";
-        }
-    }
-    return conditionsCommand;
-}
-
-std::string formatConditionsCode(std::vector<CondPar> &conditionsParsedVec) {
-    std::string conditionsCode;
-    for (const auto &conditionParsed : conditionsParsedVec) {
-        conditionsCode += "(" + conditionParsed.leftOp + " " + conditionParsed.condStr + " " +
-                          conditionParsed.rightOp + ")\n";
-    }
-    return conditionsCode;
-}
-
 cstring formatPktActionEntries(
     std::vector<std::pair<cstring, IR::MethodCallStatement>> &calledPktActionsMap) {
     cstring pktActionsTableEntries = "";
@@ -432,19 +414,6 @@ cstring formatActionTableCommand(int &srcStateNum, int &currentPktAction, cstrin
                         std::to_string(currentPktAction) + " 1"  // priority
                         + "\n";
     return (efsmTableCommand);
-}
-
-cstring formatTransitionCommand(int &srcStateNum, int &dstStateNum,
-                                std::array<bool, 4> &currentConditions, cstring &otherMatch) {
-    cstring transitionTableCommand = "table_add FlowBlaze.transition_table define_transition ";
-    cstring conditionList = "";
-    for (int i = 0; i < 4; i++) {
-        conditionList += currentConditions.at(i) ? "1&&&1 " : "0&&&0 ";
-    }
-    transitionTableCommand += std::to_string(srcStateNum) + "&&&0xFFFF " + conditionList +
-                              otherMatch + " => " + std::to_string(dstStateNum) + " 1"  // priority
-                              + "\n";
-    return (transitionTableCommand);
 }
 
 std::string formatTransitionCode(int &srcStateNum, int &dstStateNum,
@@ -488,15 +457,14 @@ void parseTransition(const IR::Expression *selectExpression,
                      std::vector<CondPar> &conditionsParsedVec,
                      std::vector<cstring> &globalDataVariables,
                      std::vector<cstring> &flowDataVariables, std::vector<cstring> stateStringToNum,
-                     const std::map<cstring, int> &registers,
-                     std::vector<std::string> &otherMatches, cstring &transitionCommands,
-                     std::string &transitionCodes, int &srcStateNum) {
+                     std::vector<std::string> &otherMatches, std::string &transitionCodes,
+                     int &srcStateNum) {
     if (selectExpression->is<IR::SelectExpression>()) {
         auto selectExpr = selectExpression->as<IR::SelectExpression>();
         std::vector<CondPar> selectArgs;
 
         parseConditionOrMatch(selectExpr, selectArgs, conditions, globalDataVariables,
-                              flowDataVariables, registers);
+                              flowDataVariables);
 
         for (const auto *sCase : selectExpr.selectCases) {
             cstring matchStr = "";
@@ -517,9 +485,6 @@ void parseTransition(const IR::Expression *selectExpression,
             }
             cstring dstState = sCase->state->toString();
             int dstStateNum = findPositionInVector(stateStringToNum, dstState);
-            cstring transitionCommand = formatTransitionCommand(srcStateNum, dstStateNum,
-                                                                currentConditionsResults, matchStr);
-            transitionCommands += transitionCommand;
             std::string transitionCode = formatTransitionCode(
                 srcStateNum, dstStateNum, conditionsParsedVec, currentConditionsResults, matchStr);
             transitionCodes += std::regex_replace(transitionCode, std::regex("\n"), "\n        ");
@@ -535,9 +500,6 @@ void parseTransition(const IR::Expression *selectExpression,
         }
         cstring dstState = selectExpression->toString();
         int dstStateNum = findPositionInVector(stateStringToNum, dstState);
-        cstring transitionCommand =
-            formatTransitionCommand(srcStateNum, dstStateNum, currentConditions, matchStr);
-        transitionCommands += transitionCommand;
         std::string transitionCode = formatTransitionCode(
             srcStateNum, dstStateNum, conditionsParsedVec, currentConditions, matchStr);
         transitionCodes += std::regex_replace(transitionCode, std::regex("\n"), "\n        ");
@@ -565,7 +527,6 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
     }
 
     cstring actionTableCommands = "";
-    cstring transitionCommands = "";
     std::string transitionCodes =
         R"(// ----------------------- UPDATE STATE BLOCK ----------------------------------
 control UpdateState(inout HEADER_NAME hdr,
@@ -597,20 +558,14 @@ control UpdateState(inout HEADER_NAME hdr,
                          srcStateNum);
 
         parseTransition(state->selectExpression, conditions, conditionsParsedVec,
-                        globalDataVariables, flowDataVariables, stateStringToNum, registers,
-                        otherMatches, transitionCommands, transitionCodes, srcStateNum);
+                        globalDataVariables, flowDataVariables, stateStringToNum,
+                        otherMatches, transitionCodes, srcStateNum);
     }
-
-    cstring conditionsCommand = formatConditionsCommand(conditionsParsedVec, conditions);
-    // cstring conditionsCode = formatConditionsCode(conditionsParsedVec);
 
     cstring pktActionsTableEntries = formatPktActionEntries(calledPktActionsMap);
 
     std::ofstream o("flowblaze-table-commands.txt");
-    o << conditionsCommand << std::endl
-      << pktActionsTableEntries << std::endl
-      << actionTableCommands << std::endl
-      << transitionCommands << std::endl;
+    o << pktActionsTableEntries << std::endl << actionTableCommands << std::endl;
     o.close();
 
     transitionCodes += "\n    }\n}\n";
