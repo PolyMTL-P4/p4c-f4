@@ -25,6 +25,9 @@ limitations under the License.
 #include <string>
 #include <vector>
 
+#include <boost/iostreams/detail/select.hpp>
+#include <boost/mpl/pair.hpp>
+
 #include "lib/cstring.h"
 
 enum {
@@ -307,7 +310,7 @@ void parseKeyset(const IR::Expression *expr, CondPar &selectArg,
         }
     } else {
         if (defaultCase) {
-            // handle
+            otherMatchesParsedVec.emplace_back(selectArg.matchVariable, "default");
         } else {
             cstring matchValue = transitionSymbol;
             otherMatchesParsedVec.emplace_back(selectArg.matchVariable, matchValue);
@@ -319,13 +322,13 @@ std::string formatAssignmentsCode(int &srcStateNum, std::vector<RegActPar> &regA
     // TODO(florent): handle else
     if (!regActionsParsedVec.empty()) {
         std::string assignmentCode =
-            "        if (flowblaze_metadata.state == " + std::to_string(srcStateNum) + ") {\n";
+            "\n        if (flowblaze_metadata.state == " + std::to_string(srcStateNum) + ") {\n";
         for (const auto &regActionParsed : regActionsParsedVec) {
             assignmentCode += "            t_result = " + regActionParsed.leftOp + " " +
                               regActionParsed.operationStr + " " + regActionParsed.rightOp + ";\n";
             assignmentCode += "            " + regActionParsed.resultOp + "t_result);\n";
         }
-        assignmentCode += "        }\n";
+        assignmentCode += "        }";
         return assignmentCode;
     }
     return "";
@@ -349,16 +352,24 @@ cstring formatEfsmTableCommand(
 std::string formatTransitionCode(
     int &dstStateNum, std::vector<CondPar> &conditionsParsedVec,
     std::array<bool, 4> &currentConditions,
-    std::vector<std::pair<std::string, std::string>> &otherMatchesParsedVec) {
-    // TODO(florent): include else statements and don’t write to register if same state
+    std::vector<std::pair<std::string, std::string>> &otherMatchesParsedVec, bool &firstIfMatch) {
     std::string conditionsIfs =
         "\nreg_state.write(flowblaze_metadata.update_state_index, (bit<16>)" +
         std::to_string(dstStateNum) + ");";
     for (auto &match : otherMatchesParsedVec) {
         std::string matchVariable = match.first;
         std::string matchValue = match.second;
-        conditionsIfs = "\nif (" + matchVariable + " == " + matchValue + ") {" +
-                        std::regex_replace(conditionsIfs, std::regex("\n"), "\n    ") + "\n}";
+        std::string initStr;
+        if (matchValue == "default") {
+            if (!firstIfMatch) {
+                initStr = " else {";
+            }
+        } else {
+            initStr = "\nif (" + matchVariable + " == " + matchValue + ") {";
+        }
+        conditionsIfs = initStr + std::regex_replace(conditionsIfs, std::regex("\n"), "\n    ") +
+                        (initStr.empty() ? "" : "\n}");
+        firstIfMatch = false;
     }
     for (size_t i = 0; i < currentConditions.size(); i++) {
         if (currentConditions.at(i)) {
@@ -386,6 +397,8 @@ void parseTransition(const IR::Expression *selectExpression,
 
         parseConditionOrMatch(selectExpr, selectArgs, conditions, globalDataVariables,
                               flowDataVariables);
+        
+        bool firstIfMatch = true;
 
         for (const auto *sCase : selectExpr.selectCases) {
             std::vector<std::pair<std::string, std::string>> otherMatchesParsedVec;
@@ -407,7 +420,7 @@ void parseTransition(const IR::Expression *selectExpression,
             if (dstStateNum != srcStateNum) {
                 std::string transitionCode =
                     formatTransitionCode(dstStateNum, conditionsParsedVec, currentConditionsResults,
-                                         otherMatchesParsedVec);
+                                         otherMatchesParsedVec, firstIfMatch);
                 transitionCodes +=
                     std::regex_replace(transitionCode, std::regex("\n"), "\n        ");
             }
@@ -418,9 +431,10 @@ void parseTransition(const IR::Expression *selectExpression,
         std::array<bool, 4 /*MAX_CONDITIONS*/> currentConditions = {false, false, false, false};
         cstring dstState = selectExpression->toString();
         int dstStateNum = findPositionInVector(stateStringToNum, dstState);
+        bool trueBool = true;
         if (dstStateNum != srcStateNum) {
             std::string transitionCode = formatTransitionCode(
-                dstStateNum, conditionsParsedVec, currentConditions, otherMatchesParsedVec);
+                dstStateNum, conditionsParsedVec, currentConditions, otherMatchesParsedVec, trueBool);
             transitionCodes += std::regex_replace(transitionCode, std::regex("\n"), "\n        ");
         }
     }
@@ -442,7 +456,7 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
     }
 
     cstring efsmTableCommands = "";
-    std::string assignmentsCode =
+    std::string updateLogicCode =
         R"(// ----------------------- UPDATE LOGIC BLOCK ----------------------------------
 control UpdateLogic(inout HEADER_NAME hdr,
                     inout flowblaze_t flowblaze_metadata,
@@ -459,20 +473,6 @@ control UpdateLogic(inout HEADER_NAME hdr,
 
         bit<32> t_result = 0;
 )";
-    std::string transitionCode =
-        R"(// ----------------------- UPDATE STATE BLOCK ----------------------------------
-control UpdateState(inout HEADER_NAME hdr,
-                    inout flowblaze_t flowblaze_metadata,
-                    in standard_metadata_t standard_metadata) {
-
-    apply{
-        // Calculate update lookup index
-        // TODO: (improvement) save hash in metadata when calculated for reading registers
-        hash(flowblaze_metadata.update_state_index,
-             HashAlgorithm.crc32,
-             (bit<32>) 0,
-             FLOW_SCOPE,
-             (bit<32>) CONTEXT_TABLE_SIZE);)";
 
     for (const auto *state : efsm->states) {
         std::vector<RegActPar> regActionsParsedVec;
@@ -488,10 +488,10 @@ control UpdateState(inout HEADER_NAME hdr,
         cstring efsmTableCommand =
             formatEfsmTableCommand(srcStateNum, calledPktActionsMap, currentPktAction);
         efsmTableCommands += efsmTableCommand;
-        assignmentsCode += formatAssignmentsCode(srcStateNum, regActionsParsedVec);
+        updateLogicCode += formatAssignmentsCode(srcStateNum, regActionsParsedVec);
 
         parseTransition(state->selectExpression, conditions, conditionsParsedVec,
-                        globalDataVariables, flowDataVariables, stateStringToNum, transitionCode,
+                        globalDataVariables, flowDataVariables, stateStringToNum, updateLogicCode,
                         srcStateNum);
     }
 
@@ -499,10 +499,9 @@ control UpdateState(inout HEADER_NAME hdr,
     o << efsmTableCommands << std::endl;
     o.close();
 
-    assignmentsCode += "\n    }\n}\n";
-    transitionCode += "\n    }\n}\n";
+    updateLogicCode += "\n    }\n}\n";
     std::ofstream olib("efsm-lib-content.p4");
-    olib << assignmentsCode << std::endl << transitionCode << std::endl;
+    olib << updateLogicCode << std::endl;
     olib.close();
 
     return nullptr;
