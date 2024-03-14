@@ -23,11 +23,13 @@ limitations under the License.
 #include <regex>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <boost/iostreams/detail/select.hpp>
 #include <boost/mpl/pair.hpp>
 
+#include "ir/ir-generated.h"
 #include "lib/cstring.h"
 
 enum {
@@ -137,6 +139,8 @@ IR::IndexedVector<IR::Declaration> *ExtendP4Class::addNameToDecls(
     return result;
 }
 
+// EFSM HELPERS
+
 cstring methodCallToString(const IR::MethodCallStatement *methodCall) {
     cstring callStr = "";
     const auto *argsOfCall = methodCall->methodCall->arguments;
@@ -234,24 +238,6 @@ void parseRegAction(RegActPar &actionParsed, const IR::AssignmentStatement *varA
                                     flowDataVariables);
         actionParsed.operationStr = "";
         actionParsed.rightOp = "";
-    }
-}
-
-void parseStatement(const IR::StatOrDecl *line,
-                    std::vector<std::pair<cstring, IR::MethodCallStatement>> &calledPktActionsMap,
-                    std::vector<RegActPar> &regActionsParsed,
-                    std::vector<cstring> &globalDataVariables,
-                    std::vector<cstring> &flowDataVariables, int &currentPktAction) {
-    if (line->is<IR::MethodCallStatement>()) {
-        parseActionCall(line->to<IR::MethodCallStatement>(), calledPktActionsMap, currentPktAction);
-    } else if (line->is<IR::AssignmentStatement>()) {
-        RegActPar actionParsed = {"", "", "", ""};
-        parseRegAction(actionParsed, line->to<IR::AssignmentStatement>(), globalDataVariables,
-                       flowDataVariables);
-        regActionsParsed.emplace_back(actionParsed);
-    } else {
-        cstring errorMsg = "Non identified statement: " + line->toString();
-        BUG(errorMsg);
     }
 }
 
@@ -397,7 +383,7 @@ void parseTransition(const IR::Expression *selectExpression,
 
         parseConditionOrMatch(selectExpr, selectArgs, conditions, globalDataVariables,
                               flowDataVariables);
-        
+
         bool firstIfMatch = true;
 
         for (const auto *sCase : selectExpr.selectCases) {
@@ -433,12 +419,41 @@ void parseTransition(const IR::Expression *selectExpression,
         int dstStateNum = findPositionInVector(stateStringToNum, dstState);
         bool trueBool = true;
         if (dstStateNum != srcStateNum) {
-            std::string transitionCode = formatTransitionCode(
-                dstStateNum, conditionsParsedVec, currentConditions, otherMatchesParsedVec, trueBool);
+            std::string transitionCode =
+                formatTransitionCode(dstStateNum, conditionsParsedVec, currentConditions,
+                                     otherMatchesParsedVec, trueBool);
             transitionCodes += std::regex_replace(transitionCode, std::regex("\n"), "\n        ");
         }
     }
     transitionCodes += "\n        }";
+}
+
+void parseStatement(const IR::StatOrDecl *line,
+                    std::vector<std::pair<cstring, IR::MethodCallStatement>> &calledPktActionsMap,
+                    std::vector<RegActPar> &regActionsParsed,
+                    std::vector<cstring> &globalDataVariables,
+                    std::vector<cstring> &flowDataVariables, int &currentPktAction,
+                    const std::map<cstring, uint> &conditions,
+                    std::vector<CondPar> &conditionsParsedVec,
+                    std::vector<cstring> stateStringToNum, std::string &transitionCodes,
+                    int &srcStateNum) {
+    if (line->is<IR::MethodCallStatement>()) {
+        parseActionCall(line->to<IR::MethodCallStatement>(), calledPktActionsMap, currentPktAction);
+    } else if (line->is<IR::AssignmentStatement>()) {
+        RegActPar actionParsed = {"", "", "", ""};
+        parseRegAction(actionParsed, line->to<IR::AssignmentStatement>(), globalDataVariables,
+                       flowDataVariables);
+        regActionsParsed.emplace_back(actionParsed);
+    } else if (line->is<IR::EfsmTransitionStatement>()) {
+        const auto *selectExpression = line->to<IR::EfsmTransitionStatement>()->selectExpression;
+        parseTransition(selectExpression, conditions, conditionsParsedVec, globalDataVariables,
+                        flowDataVariables, std::move(stateStringToNum), transitionCodes, srcStateNum);
+    } else if (line->is<IR::IfStatement>()) {
+        std::cout << "if!" << std::endl;
+    } else {
+        cstring errorMsg = "Non identified statement: " + line->toString();
+        BUG(errorMsg);
+    }
 }
 
 const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
@@ -464,7 +479,6 @@ control UpdateLogic(inout HEADER_NAME hdr,
 
     apply{
         // Calculate update lookup index
-        // TODO: (improvement) save hash in metadata when calculated for reading registers
         hash(flowblaze_metadata.update_state_index,
              HashAlgorithm.crc32,
              (bit<32>) 0,
@@ -482,17 +496,14 @@ control UpdateLogic(inout HEADER_NAME hdr,
 
         for (const auto *line : state->components) {
             parseStatement(line, calledPktActionsMap, regActionsParsedVec, globalDataVariables,
-                           flowDataVariables, currentPktAction);
+                           flowDataVariables, currentPktAction, conditions, conditionsParsedVec,
+                           stateStringToNum, updateLogicCode, srcStateNum);
         }
 
         cstring efsmTableCommand =
             formatEfsmTableCommand(srcStateNum, calledPktActionsMap, currentPktAction);
         efsmTableCommands += efsmTableCommand;
         updateLogicCode += formatAssignmentsCode(srcStateNum, regActionsParsedVec);
-
-        parseTransition(state->selectExpression, conditions, conditionsParsedVec,
-                        globalDataVariables, flowDataVariables, stateStringToNum, updateLogicCode,
-                        srcStateNum);
     }
 
     std::ofstream o("flowblaze-table-commands.txt");

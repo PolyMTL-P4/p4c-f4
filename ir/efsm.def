@@ -1,8 +1,12 @@
+class EfsmTransitionStatement : Statement {
+    Expression       selectExpression;
+}
+
 class EfsmState : ISimpleNamespace, Declaration, IAnnotated {
     optional Annotations                        annotations = Annotations::empty;
     optional inline IndexedVector<StatOrDecl>   components;
     // selectExpression can be a SelectExpression, or a PathExpression representing a state
-    NullOK Expression                   selectExpression;
+    optional NullOK Expression                   selectExpression;
 
     Annotations getAnnotations() const override { return annotations; }
     Util::Enumerator<IDeclaration>* getDeclarations() const override {
@@ -44,3 +48,4 @@ class P4Efsm : Declaration, ISimpleNamespace, IAnnotated {
     }
     toString { return cstring("efsm ") + externalName(); }
 }
+

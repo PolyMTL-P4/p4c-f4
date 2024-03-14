@@ -23,6 +23,7 @@ limitations under the License.
 #include "dbprint.h"
 #include "ir/id.h"
 #include "ir/indexed_vector.h"
+#include "ir/ir-generated.h"
 #include "ir/ir.h"
 #include "ir/namemap.h"
 #include "ir/node.h"
@@ -173,6 +174,9 @@ void IR::EfsmState::dbprint(std::ostream &out) const {
     for (auto s : components) out << Log::endl << s;
     if (selectExpression) out << Log::endl << selectExpression;
     out << " }" << unindent;
+}
+void IR::EfsmTransitionStatement::dbprint(std::ostream &out) const {
+    out << "transition " << selectExpression << ";";
 }
 void IR::P4Efsm::dbprint(std::ostream &out) const {
     out << "efsm " << name << "(";
