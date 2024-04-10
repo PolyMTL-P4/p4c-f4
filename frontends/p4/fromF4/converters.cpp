@@ -56,7 +56,7 @@ struct CondPar {
 
 namespace F4 {
 
-///////////////////////////////////////////////////////////////
+/////////// THIS PART IS FOR P4CLASS ///////////////////////
 
 const IR::Node *ReplaceMembers::preorder(IR::Member *IRmember) {
     auto exprName = IRmember->expr->toString();
@@ -132,6 +132,13 @@ IR::IndexedVector<IR::Declaration> *ExtendP4Class::addNameToDecls(
     return result;
 }
 
+/////////// END OF P4CLASS PART ///////////////////////////
+
+/////////// THIS PART IS FOR EFSM /////////////////////////
+
+//// HELPERS
+
+// equivalent of the usually implemented toString method for IR
 cstring methodCallToString(const IR::MethodCallStatement *methodCall) {
     cstring callStr = "";
     const auto *argsOfCall = methodCall->methodCall->arguments;
@@ -176,6 +183,8 @@ cstring intToBinStr(uint number) {
     std::bitset<sizeof(number)> bs(number);
     return ("0b" + bs.to_string());
 }
+
+//// PARSING FUNCTIONS
 
 void parseActionCall(const IR::MethodCallStatement *actionCall,
                      std::vector<std::pair<cstring, IR::MethodCallStatement>> &calledPktActionsMap,
@@ -330,6 +339,8 @@ void parseKeyset(const IR::Expression *expr, CondPar &selectArg,
     }
 }
 
+//// FORMATTING FUNCTIONS
+
 cstring formatActionParsed(std::vector<RegActPar> &regActionsParsedVec,
                            const std::map<cstring, int> &operations) {
     cstring actionsForEfsm = "";
@@ -453,8 +464,7 @@ void parseTransition(const IR::Expression *selectExpression,
         std::array<bool, 4 /*MAX_CONDITIONS*/> currentConditions = {false, false, false, false};
         cstring emptyMatch = "0&&&0 ";
         cstring matchStr = "";
-        // c’est sketchy, les variables de matchs devraient être déclarées avant l’EFSM et on
-        // devrait les récupérer à cet endroit là
+        // match variables should be declared before the EFSM and retrieved here
         for (size_t i = 0; i < otherMatches.size(); i++) {
             matchStr += emptyMatch;
         }
@@ -523,6 +533,7 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
     return nullptr;
 }
 
+// This is a test to convert the call to the efsm structure
 /*const IR::Node *EfsmToFlowBlaze::preorder(IR::MethodCallExpression *call) {
     if (call->method->is<IR::Member>()) {
         auto *membre = call->method->as<IR::Member>().clone();
@@ -537,6 +548,9 @@ const IR::Node *EfsmToFlowBlaze::preorder(IR::P4Efsm *efsm) {
     return call;
 }
 */
+
+// This is a test for a second backend, here using the
+// https://github.com/Princeton-Cabernet/DFA-synthesis JSON format
 const IR::Node *EfsmToDfaSynthesis::preorder(IR::P4Efsm * /*efsm*/) {
     /*json dfaTotal;
     std::vector<cstring> sigma;
