@@ -63,7 +63,7 @@ struct CondPar {
 
 namespace F4 {
 
-///////////////////////////////////////////////////////////////
+/////////// THIS PART IS FOR P4CLASS ///////////////////////
 
 const IR::Node *ReplaceMembers::preorder(IR::Member *IRmember) {
     auto exprName = IRmember->expr->toString();
@@ -139,8 +139,13 @@ IR::IndexedVector<IR::Declaration> *ExtendP4Class::addNameToDecls(
     return result;
 }
 
-// EFSM HELPERS
+/////////// END OF P4CLASS PART ///////////////////////////
 
+/////////// THIS PART IS FOR EFSM /////////////////////////
+
+//// EFSM HELPERS
+
+// equivalent of the usually implemented toString method for IR
 cstring methodCallToString(const IR::MethodCallStatement *methodCall) {
     cstring callStr = "";
     const auto *argsOfCall = methodCall->methodCall->arguments;
@@ -174,6 +179,8 @@ void insertIfNotInVec(std::vector<T> &vector, T element) {
         vector.push_back(element);
     }
 }
+
+//// PARSING FUNCTIONS
 
 void parseActionCall(const IR::MethodCallStatement *actionCall,
                      std::vector<std::pair<cstring, IR::MethodCallStatement>> &calledPktActionsMap,
@@ -304,8 +311,10 @@ void parseKeyset(const IR::Expression *expr, CondPar &selectArg,
     }
 }
 
+//// FORMATTING FUNCTIONS
+
 std::string formatAssignmentCode(RegActPar &regActionParsed) {
-    // TODO(florent): handle else
+    // TODO: handle else
     std::string assignmentCode;
     assignmentCode += "\nt_result = " + regActionParsed.leftOp + " " +
                       regActionParsed.operationStr + " " + regActionParsed.rightOp + ";";
@@ -566,6 +575,7 @@ control UpdateLogic(inout HEADER_NAME hdr,
     return nullptr;
 }
 
+// This is a test to convert the call to the efsm structure
 /*const IR::Node *EfsmToFlowBlaze::preorder(IR::MethodCallExpression *call) {
     if (call->method->is<IR::Member>()) {
         auto *membre = call->method->as<IR::Member>().clone();
@@ -580,6 +590,9 @@ control UpdateLogic(inout HEADER_NAME hdr,
     return call;
 }
 */
+
+// This is a test for a second backend, here using the
+// https://github.com/Princeton-Cabernet/DFA-synthesis JSON format
 const IR::Node *EfsmToDfaSynthesis::preorder(IR::P4Efsm * /*efsm*/) {
     /*json dfaTotal;
     std::vector<cstring> sigma;
